@@ -1,0 +1,21 @@
+timestamp,event_type,source_ip,username,hostname,message
+2025-08-19T10:01:00+00:00,SUCCESSFUL_LOGIN,10.0.0.5,jdoe,server01.corp.local,Service account login
+2025-08-19T10:14:00+00:00,SUCCESSFUL_LOGIN,10.0.0.5,jdoe,server01.corp.local,Service account login
+2025-08-19T10:15:00+00:00,SUCCESSFUL_LOGIN,10.0.0.5,jdoe,server01.corp.local,Scheduled job authentication
+2025-08-19T10:20:00+00:00,SUCCESSFUL_LOGIN,10.0.0.5,jdoe,server01.corp.local,Scheduled job authentication
+2025-08-19T10:23:00+00:00,SUCCESSFUL_LOGIN,10.0.0.5,jdoe,server01.corp.local,Scheduled job authentication
+2025-08-19T10:31:00+00:00,FAILED_LOGIN,192.168.1.55,admin,server01.corp.local,Invalid password attempt
+2025-08-19T10:31:01.534505+00:00,FAILED_LOGIN,192.168.1.55,admin,server01.corp.local,Authentication failed: bad credentials
+2025-08-19T10:31:03.981579+00:00,FAILED_LOGIN,192.168.1.55,admin,server01.corp.local,Failed logon attempt for user
+2025-08-19T10:31:05.705624+00:00,FAILED_LOGIN,192.168.1.55,admin,server01.corp.local,Failed logon attempt for user
+2025-08-19T10:31:07.706298+00:00,FAILED_LOGIN,192.168.1.55,admin,server01.corp.local,Invalid password attempt
+2025-08-19T10:31:09.142277+00:00,FAILED_LOGIN,192.168.1.55,admin,server01.corp.local,Invalid password attempt
+2025-08-19T10:31:10.494553+00:00,FAILED_LOGIN,192.168.1.55,admin,server01.corp.local,Failed logon attempt for user
+2025-08-19T10:31:12.278345+00:00,FAILED_LOGIN,192.168.1.55,admin,server01.corp.local,Failed logon attempt for user
+2025-08-19T10:31:14.705854+00:00,FAILED_LOGIN,192.168.1.55,admin,server01.corp.local,Invalid password attempt
+2025-08-19T10:31:16.162105+00:00,FAILED_LOGIN,192.168.1.55,admin,server01.corp.local,Invalid password attempt
+2025-08-19T10:31:17.877318+00:00,FAILED_LOGIN,192.168.1.55,admin,server01.corp.local,Login failure: incorrect password
+2025-08-19T10:31:18.754588+00:00,FAILED_LOGIN,192.168.1.55,admin,server01.corp.local,Failed logon attempt for user
+2025-08-19T10:31:20.156476+00:00,FAILED_LOGIN,192.168.1.55,admin,server01.corp.local,Failed logon attempt for user
+2025-08-19T10:31:21.396830+00:00,FAILED_LOGIN,192.168.1.55,admin,server01.corp.local,Authentication failed: bad credentials
+2025-08-19T10:31:24.133355+00:00,FAILED_LOGIN,192.168.1.55,admin,server01.corp.local,Invalid password attempt

@@ -1,0 +1,108 @@
+version: "3.9"
+
+services:
+  # ─── PostgreSQL 16 ────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: soc_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-socdb}
+      POSTGRES_USER: ${POSTGRES_USER:-socuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-socpassword}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-socuser} -d ${POSTGRES_DB:-socdb}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ─── ChromaDB (vector store for RAG) ─────────────────────────────────────
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: soc_chromadb
+    restart: unless-stopped
+    environment:
+      CHROMA_SERVER_HOST: "0.0.0.0"
+      CHROMA_SERVER_HTTP_PORT: "8001"
+      ANONYMIZED_TELEMETRY: "false"
+    volumes:
+      - chroma_data:/chroma/chroma
+    ports:
+      - "8001:8001"
+
+
+  # ─── FastAPI Backend ──────────────────────────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: soc_backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      chromadb:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-socuser}:${POSTGRES_PASSWORD:-socpassword}@postgres:5432/${POSTGRES_DB:-socdb}
+      DATABASE_SYNC_URL: postgresql://${POSTGRES_USER:-socuser}:${POSTGRES_PASSWORD:-socpassword}@postgres:5432/${POSTGRES_DB:-socdb}
+      CHROMA_HOST: chromadb
+      CHROMA_PORT: "8001"
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-CHANGE_ME_in_production}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-1440}
+      LLM_PROVIDER: ${LLM_PROVIDER:-gemini}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-1.5-flash}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      CORS_ORIGINS: "http://localhost:3000,http://localhost:80,http://nginx"
+      REPORTS_DIR: /app/generated_reports
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-analyst@demo.com}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-demo1234}
+    volumes:
+      - reports_data:/app/generated_reports
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ─── Next.js Frontend ─────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    container_name: soc_frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+
+  # ─── Nginx Reverse Proxy ──────────────────────────────────────────────────
+  nginx:
+    image: nginx:alpine
+    container_name: soc_nginx
+    restart: unless-stopped
+    depends_on:
+      - backend
+      - frontend
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "80:80"
+
+volumes:
+  postgres_data:
+  chroma_data:
+  reports_data:

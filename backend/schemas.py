@@ -1,0 +1,219 @@
+"""
+Pydantic v2 Schemas — request/response models for all API endpoints.
+"""
+
+from __future__ import annotations
+
+import uuid
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+from pydantic import BaseModel, ConfigDict, Field
+
+
+# ─── Common ──────────────────────────────────────────────────────────────────
+
+class ORMBase(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ─── Security Events ─────────────────────────────────────────────────────────
+
+class SecurityEventOut(ORMBase):
+    id: uuid.UUID
+    source_ip: str
+    destination_ip: Optional[str]
+    username: Optional[str]
+    hostname: Optional[str]
+    event_type: str
+    event_category: str
+    timestamp: datetime
+    description: Optional[str]
+    raw_log: str
+    source_file: Optional[str]
+    is_flagged: bool
+    incident_id: Optional[uuid.UUID]
+
+
+class SecurityEventListResponse(BaseModel):
+    total: int
+    items: List[SecurityEventOut]
+
+
+# ─── Log Upload ───────────────────────────────────────────────────────────────
+
+class LogUploadResponse(BaseModel):
+    job_id: str
+    events_parsed: int
+    events_flagged: int
+    incidents_created: int
+    processing_time_ms: int
+    source_file: str
+
+
+# ─── Attack Techniques ────────────────────────────────────────────────────────
+
+class AttackTechniqueOut(ORMBase):
+    id: uuid.UUID
+    incident_id: uuid.UUID
+    technique_id: str
+    technique_name: str
+    tactic: str
+    sub_technique_id: Optional[str]
+    sub_technique_name: Optional[str]
+    confidence: float
+    mapping_source: str
+    url: Optional[str]
+
+
+# ─── Evidence ─────────────────────────────────────────────────────────────────
+
+class EvidenceOut(ORMBase):
+    id: uuid.UUID
+    incident_id: uuid.UUID
+    event_id: uuid.UUID
+    role: str
+    description: Optional[str]
+    sequence_order: Optional[int]
+    event: Optional[SecurityEventOut] = None
+
+
+class EvidenceListResponse(BaseModel):
+    evidence: List[EvidenceOut]
+
+
+# ─── Incidents ────────────────────────────────────────────────────────────────
+
+class IncidentSummary(ORMBase):
+    id: uuid.UUID
+    title: str
+    attack_type: str
+    severity: str
+    confidence: float
+    status: str
+    affected_username: Optional[str]
+    source_ip: Optional[str]
+    first_seen: datetime
+    last_seen: datetime
+    event_count: int
+    created_at: datetime
+
+
+class IncidentDetail(ORMBase):
+    id: uuid.UUID
+    title: str
+    description: Optional[str]
+    attack_type: str
+    severity: str
+    confidence: float
+    status: str
+    affected_username: Optional[str]
+    affected_host: Optional[str]
+    source_ip: Optional[str]
+    first_seen: datetime
+    last_seen: datetime
+    event_count: int
+    attack_hypothesis: Optional[Dict[str, Any]]
+    created_at: datetime
+    updated_at: datetime
+    techniques: List[AttackTechniqueOut] = []
+    evidence: List[EvidenceOut] = []
+
+
+class IncidentListResponse(BaseModel):
+    total: int
+    items: List[IncidentSummary]
+
+
+class IncidentStatusUpdate(BaseModel):
+    status: str = Field(..., pattern="^(OPEN|INVESTIGATING|CLOSED|FALSE_POSITIVE)$")
+
+
+# ─── Investigation Sessions ───────────────────────────────────────────────────
+
+class SessionCreateResponse(BaseModel):
+    session_id: uuid.UUID
+    incident_id: uuid.UUID
+    created_at: datetime
+
+
+class ChatMessageOut(ORMBase):
+    id: uuid.UUID
+    session_id: uuid.UUID
+    role: str
+    content: str
+    evidence_ids: Optional[List[str]]
+    rag_chunks_used: Optional[List[Dict[str, Any]]]
+    answer_type: Optional[str]
+    ai_confidence: Optional[float]
+    timestamp: datetime
+
+
+class ChatRequest(BaseModel):
+    message: str = Field(..., min_length=1, max_length=2000)
+
+
+class ChatResponse(BaseModel):
+    message_id: uuid.UUID
+    answer: str
+    evidence_ids: List[str]
+    mitre_references: List[str]
+    rag_sources: List[str]
+    answer_type: str
+    confidence: float
+
+
+class MessageListResponse(BaseModel):
+    session_id: uuid.UUID
+    messages: List[ChatMessageOut]
+
+
+# ─── Reports ─────────────────────────────────────────────────────────────────
+
+class ReportRequest(BaseModel):
+    format: str = Field("MARKDOWN", pattern="^(MARKDOWN|JSON)$")
+    include_ai_summary: bool = True
+
+
+class ReportOut(ORMBase):
+    id: uuid.UUID
+    incident_id: uuid.UUID
+    generated_at: datetime
+    format: str
+    content: str
+    ai_summary: Optional[str]
+    recommended_actions: Optional[List[str]]
+
+
+class ReportCreateResponse(BaseModel):
+    report_id: uuid.UUID
+    download_url: str
+
+
+# ─── Dashboard ───────────────────────────────────────────────────────────────
+
+class DashboardSummary(BaseModel):
+    total_incidents: int
+    open_incidents: int
+    critical_count: int
+    high_count: int
+    medium_count: int
+    low_count: int
+    events_processed_total: int
+    events_flagged_total: int
+    incidents_by_type: Dict[str, int]
+    severity_distribution: Dict[str, int]
+    recent_incidents: List[IncidentSummary]
+
+
+# ─── Auth ─────────────────────────────────────────────────────────────────────
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int

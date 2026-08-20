@@ -1,0 +1,17 @@
+timestamp,event_type,source_ip,username,hostname,message,file_path
+2025-08-19T14:02:00+00:00,SUCCESSFUL_LOGIN,10.0.0.20,sarah.miller,workstation-42.corp.local,Routine login from corporate network,
+2025-08-19T14:03:00+00:00,SUCCESSFUL_LOGIN,10.0.0.20,sarah.miller,workstation-42.corp.local,Routine login from corporate network,
+2025-08-19T14:07:00+00:00,SUCCESSFUL_LOGIN,10.0.0.20,sarah.miller,workstation-42.corp.local,Routine login from corporate network,
+2025-08-19T14:08:00+00:00,SUCCESSFUL_LOGIN,10.0.0.20,sarah.miller,workstation-42.corp.local,Routine login from corporate network,
+2025-08-19T14:15:00+00:00,FAILED_LOGIN,10.10.5.200,sarah.miller,workstation-42.corp.local,Authentication failed: invalid credentials,
+2025-08-19T14:15:07.771503+00:00,FAILED_LOGIN,10.10.5.200,sarah.miller,workstation-42.corp.local,Authentication failed: invalid credentials,
+2025-08-19T14:15:13.291484+00:00,FAILED_LOGIN,10.10.5.200,sarah.miller,workstation-42.corp.local,Authentication failed: invalid credentials,
+2025-08-19T14:15:15.669247+00:00,FAILED_LOGIN,10.10.5.200,sarah.miller,workstation-42.corp.local,Authentication failed: invalid credentials,
+2025-08-19T14:15:23.204360+00:00,FAILED_LOGIN,10.10.5.200,sarah.miller,workstation-42.corp.local,Authentication failed: invalid credentials,
+2025-08-19T14:15:29.036020+00:00,FAILED_LOGIN,10.10.5.200,sarah.miller,workstation-42.corp.local,Authentication failed: invalid credentials,
+2025-08-19T14:15:32.691362+00:00,FAILED_LOGIN,10.10.5.200,sarah.miller,workstation-42.corp.local,Authentication failed: invalid credentials,
+2025-08-19T14:15:37.754450+00:00,FAILED_LOGIN,10.10.5.200,sarah.miller,workstation-42.corp.local,Authentication failed: invalid credentials,
+2025-08-19T14:15:51.849908+00:00,SUCCESSFUL_LOGIN,10.10.5.200,sarah.miller,workstation-42.corp.local,User sarah.miller authenticated successfully,
+2025-08-19T14:17:51.849908+00:00,FILE_READ,10.10.5.200,sarah.miller,workstation-42.corp.local,File accessed: /home/sarah.miller/.ssh/id_rsa,/home/sarah.miller/.ssh/id_rsa
+2025-08-19T14:18:21.849908+00:00,FILE_READ,10.10.5.200,sarah.miller,workstation-42.corp.local,File accessed: /etc/passwd,/etc/passwd
+2025-08-19T14:18:51.849908+00:00,FILE_READ,10.10.5.200,sarah.miller,workstation-42.corp.local,File accessed: /var/log/auth.log,/var/log/auth.log
