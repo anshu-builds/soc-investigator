@@ -6,12 +6,33 @@
 
 /* ─── Base ───────────────────────────────────────────────────────────────── */
 :root {
-  --bg-primary:   #0a0e1a;
-  --bg-secondary: #0f1629;
-  --bg-tertiary:  #141c35;
-  --border:       #1e2d4d;
-  --accent-cyan:  #00d4ff;
-  --accent-blue:  #3b82f6;
+  --bg-primary:   #f5fbf7;
+  --bg-secondary: rgba(238, 246, 227, 0.72);
+  --bg-tertiary:  rgba(207, 233, 240, 0.58);
+  --border:       rgba(24, 34, 31, 0.14);
+  --accent-cyan:  #7fbf9a;
+  --accent-blue:  #4d9a79;
+  --jade:         #7fbf9a;
+  --sage:         #b7d98e;
+  --sky:          #cfe9f0;
+  --cream:        #eef6e3;
+  --ink:          #18221f;
+  --grid-line:    rgba(127, 191, 154, 0.1);
+}
+
+html.dark {
+  --bg-primary:   #0d1714;
+  --bg-secondary: rgba(20, 34, 30, 0.7);
+  --bg-tertiary:  rgba(31, 52, 45, 0.55);
+  --border:       rgba(179, 224, 206, 0.2);
+  --accent-cyan:  #8cc9a4;
+  --accent-blue:  #5faf89;
+  --jade:         #8cc9a4;
+  --sage:         #9dcf8f;
+  --sky:          #6ea0b1;
+  --cream:        #203028;
+  --ink:          #e7f3ee;
+  --grid-line:    rgba(123, 181, 154, 0.09);
 }
 
 * { box-sizing: border-box; }
@@ -22,26 +43,25 @@ html {
 
 body {
   background-color: var(--bg-primary);
-  color: #e2e8f0;
+  color: var(--ink);
   font-family: 'Inter', system-ui, sans-serif;
   min-height: 100vh;
-  background-image:
-    linear-gradient(rgba(59,91,152,0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(59,91,152,0.04) 1px, transparent 1px);
-  background-size: 32px 32px;
+  background-image: linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: 36px 36px;
 }
 
 /* ─── Scrollbar ──────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: var(--bg-secondary); }
-::-webkit-scrollbar-thumb { background: #2d4a7a; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #3b82f6; }
+::-webkit-scrollbar-thumb { background: rgba(77, 154, 121, 0.55); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--jade); }
 
 /* ─── Components ─────────────────────────────────────────────────────────── */
 @layer components {
   /* Glass card */
   .card {
-    @apply bg-bg-card border border-border rounded-xl shadow-card backdrop-blur-sm;
+    @apply rounded-2xl border border-black/10 bg-white/65 shadow-card backdrop-blur-xl;
   }
 
   .card-hover {
@@ -74,19 +94,19 @@ body {
 
   /* Input */
   .input {
-    @apply bg-bg-tertiary border border-border rounded-lg px-3 py-2 text-sm text-slate-200
-           placeholder:text-slate-500 focus:outline-none focus:border-accent-blue focus:ring-1
-           focus:ring-accent-blue/30 transition-colors;
+      @apply rounded-xl border border-black/10 bg-white/70 px-3 py-2 text-sm text-ink
+        placeholder:text-slate-500 focus:border-accent-blue focus:outline-none focus:ring-1
+        focus:ring-accent-blue/30 transition-colors;
   }
 
   /* Button variants */
   .btn-primary {
-    @apply px-4 py-2 rounded-lg bg-accent-blue text-white text-sm font-medium
-           hover:bg-blue-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+      @apply rounded-xl bg-accent-blue px-4 py-2 text-sm font-medium text-white
+        hover:bg-jade transition-colors disabled:cursor-not-allowed disabled:opacity-50;
   }
   .btn-ghost {
-    @apply px-4 py-2 rounded-lg text-slate-400 text-sm font-medium border border-border
-           hover:border-border-bright hover:text-slate-200 transition-colors;
+      @apply rounded-xl border border-black/10 px-4 py-2 text-sm font-medium text-slate-600
+        hover:border-jade hover:bg-white/70 hover:text-ink transition-colors;
   }
   .btn-danger {
     @apply px-4 py-2 rounded-lg bg-red-900/40 text-red-400 text-sm font-medium border border-red-800/50
@@ -146,4 +166,15 @@ body {
 @keyframes typingDot {
   0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
   40%            { transform: scale(1.0); opacity: 1; }
+}
+
+@keyframes investigationFloat {
+  0%, 100% { transform: translateY(0px) rotate(var(--rot, 0deg)); }
+  50% { transform: translateY(-10px) rotate(var(--rot, 0deg)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [style*='investigationFloat'] {
+    animation: none !important;
+  }
 }

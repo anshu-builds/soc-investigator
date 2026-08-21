@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import './globals.css'
 import { Sidebar } from '@/components/layout/Sidebar'
+import { GradientBackground } from '@/components/ui/jade-sky'
 
 export const metadata: Metadata = {
   title: 'SOC Investigator | PS 114',
@@ -14,7 +15,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en">
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
@@ -33,9 +34,10 @@ export default function RootLayout({
 function AppShell({ children }: { children: React.ReactNode }) {
   // Pages that don't use the sidebar (login)
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="relative min-h-screen overflow-hidden">
+      <GradientBackground className="pointer-events-none absolute inset-0" />
       <Sidebar />
-      <main className="flex-1 overflow-y-auto">
+      <main className="relative z-10 min-h-screen ml-[280px] overflow-y-auto">
         {children}
       </main>
     </div>
