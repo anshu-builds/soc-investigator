@@ -1,93 +1,112 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import {
-  AlertTriangle,
-  Shield,
   Activity,
-  Zap,
-  TrendingUp,
-  Eye,
-  ChevronRight,
+  AlertTriangle,
+  ArrowRight,
+  BarChart3,
+  RefreshCw,
+  ShieldAlert,
   Upload,
 } from 'lucide-react'
-import { getDashboardSummary } from '@/lib/api'
-import type { DashboardSummary, IncidentSummary } from '@/lib/types'
-import { SeverityBadge, StatusBadge, AttackTypeLabel } from '@/components/ui/badges'
 import {
-  BarChart,
   Bar,
-  PieChart,
-  Pie,
+  BarChart,
+  CartesianGrid,
   Cell,
+  LabelList,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from 'recharts'
 import { formatDistanceToNow } from 'date-fns'
-import { InvestigationBlocksBackground } from '@/components/ui/investigation-blocks-bg'
-import { BorderBeam } from '@/components/ui/border-beam'
+import { getDashboardSummary } from '@/lib/api'
+import type { DashboardSummary, IncidentSummary } from '@/lib/types'
+import { AttackTypeLabel, SeverityBadge, StatusBadge } from '@/components/ui/badges'
+
+const ALL_SEVERITIES = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'] as const
 
 const SEVERITY_COLORS: Record<string, string> = {
-  CRITICAL: '#ef4444',
-  HIGH: '#f97316',
-  MEDIUM: '#eab308',
-  LOW: '#22c55e',
+  CRITICAL: '#dc2626',
+  HIGH: '#ea580c',
+  MEDIUM: '#d97706',
+  LOW: '#64748b',
 }
 
-function StatCard({
-  title,
-  value,
-  icon: Icon,
-  color,
-  subtitle,
-}: {
-  title: string
-  value: number | string
+interface MetricCardProps {
+  label: string
+  value: string | number
   icon: React.ElementType
-  color: string
-  subtitle?: string
-}) {
+  detail?: string
+  accentColor?: string
+}
+
+function MetricCard({ label, value, icon: Icon, detail, accentColor }: MetricCardProps) {
   return (
-    <BorderBeam size="pulse-inner" colorVariant="colorful" theme="dark" strength={1} className="rounded-2xl">
-      <div className="card p-5 flex items-start gap-4 relative overflow-hidden group hover:border-black/20 transition-colors">
-        <div className={`w-10 h-10 rounded-lg ${color} flex items-center justify-center flex-shrink-0`}>
-          <Icon className="w-5 h-5 text-white" />
-        </div>
+    <div className="card group flex flex-col justify-between p-5 transition-all duration-150 hover:border-[#c8d1cb] hover:shadow-sm">
+      <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-2xl font-bold text-ink tabular-nums">{value}</div>
-          <div className="text-sm text-slate-600 mt-0.5">{title}</div>
-          {subtitle && <div className="text-xs text-slate-500 mt-1">{subtitle}</div>}
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-[#667085]">
+            {label}
+          </p>
+          <p className="mt-2 text-3xl font-bold tracking-tight text-[#111827] tabular-nums">
+            {value}
+          </p>
         </div>
-        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 bg-gradient-to-r from-transparent to-jade/10 transition-opacity pointer-events-none" />
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#e6e8eb] bg-[#f8fafc] text-[#475467] transition-colors group-hover:border-[#d0d5dd] group-hover:bg-[#f1f5f9]">
+          <Icon className="h-4.5 w-4.5 text-[#475467]" style={accentColor ? { color: accentColor } : undefined} />
+        </div>
       </div>
-    </BorderBeam>
+      {detail ? (
+        <p className="mt-3 text-xs font-medium text-[#667085] border-t border-[#f0f1f3] pt-2.5">
+          {detail}
+        </p>
+      ) : (
+        <div className="mt-3" />
+      )}
+    </div>
   )
 }
 
 function IncidentRow({ incident }: { incident: IncidentSummary }) {
   return (
-    <Link href={`/incidents/${incident.id}`} className="block">
-      <div className="flex items-center gap-3 px-4 py-3 hover:bg-white/45 transition-colors rounded-lg cursor-pointer group">
-        <SeverityBadge severity={incident.severity} />
-        <div className="flex-1 min-w-0">
-          <div className="text-sm font-medium text-slate-700 truncate group-hover:text-ink transition-colors">
-            {incident.title}
-          </div>
-          <div className="flex items-center gap-2 mt-0.5">
-            <AttackTypeLabel attackType={incident.attack_type} />
-            <span className="text-slate-400">.</span>
-            <span className="text-xs text-slate-500">
-              {formatDistanceToNow(new Date(incident.created_at), { addSuffix: true })}
-            </span>
-          </div>
+    <tr className="transition-colors hover:bg-[#f8fafc]">
+      <td className="px-6 py-3.5">
+        <Link
+          href={`/incidents/${incident.id}`}
+          className="font-mono text-xs font-medium text-[#2563eb] hover:underline"
+        >
+          {incident.id.slice(0, 8)}
+        </Link>
+      </td>
+      <td className="px-6 py-3.5 max-w-[280px]">
+        <Link
+          href={`/incidents/${incident.id}`}
+          className="block truncate text-sm font-medium text-[#111827] hover:text-[#168a52] transition-colors"
+          title={incident.title}
+        >
+          {incident.title}
+        </Link>
+        <div className="mt-0.5">
+          <AttackTypeLabel attackType={incident.attack_type} />
         </div>
+      </td>
+      <td className="px-6 py-3.5 whitespace-nowrap">
+        <SeverityBadge severity={incident.severity} />
+      </td>
+      <td className="px-6 py-3.5 text-sm text-[#475467] whitespace-nowrap">
+        {incident.affected_username || incident.source_ip || '—'}
+      </td>
+      <td className="px-6 py-3.5 text-sm text-[#667085] whitespace-nowrap">
+        {formatDistanceToNow(new Date(incident.created_at), { addSuffix: true })}
+      </td>
+      <td className="px-6 py-3.5 whitespace-nowrap">
         <StatusBadge status={incident.status} />
-        <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-600 flex-shrink-0 transition-colors" />
-      </div>
-    </Link>
+      </td>
+    </tr>
   )
 }
 
@@ -96,188 +115,305 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    getDashboardSummary()
-      .then(setSummary)
-      .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load dashboard'))
-      .finally(() => setLoading(false))
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      setSummary(await getDashboardSummary())
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load dashboard')
+    } finally {
+      setLoading(false)
+    }
   }, [])
+
+  useEffect(() => {
+    load()
+  }, [load])
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="flex items-center gap-3 text-slate-500">
-          <div className="w-5 h-5 border-2 border-jade border-t-transparent rounded-full animate-spin" />
-          Loading SOC dashboard...
-        </div>
+      <div className="flex min-h-[60vh] items-center justify-center text-sm text-[#667085]">
+        <RefreshCw className="mr-2 h-4 w-4 animate-spin text-[#168a52]" />
+        Loading dashboard…
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-center">
-          <AlertTriangle className="w-10 h-10 text-red-500 mx-auto mb-3" />
-          <p className="text-red-600 font-medium">{error}</p>
-          <p className="text-slate-500 text-sm mt-2">Check if the backend is running</p>
+      <div className="flex min-h-[60vh] items-center justify-center p-6">
+        <div className="card max-w-sm p-6 text-center">
+          <AlertTriangle className="mx-auto h-7 w-7 text-[#dc2626]" />
+          <p className="mt-3 font-semibold text-[#111827]">Dashboard unavailable</p>
+          <p className="mt-1 text-sm text-[#667085]">{error}</p>
+          <button onClick={load} className="btn-ghost mt-4 w-full justify-center">
+            Try again
+          </button>
         </div>
       </div>
     )
   }
 
-  const severityData = summary
-    ? Object.entries(summary.severity_distribution).map(([name, value]) => ({
-        name,
-        value,
-        fill: SEVERITY_COLORS[name] || '#64748b',
-      }))
-    : []
+  const severityDistribution = summary?.severity_distribution || {}
+  const severityData = ALL_SEVERITIES.map((name) => ({
+    name,
+    value: severityDistribution[name] ?? 0,
+    fill: SEVERITY_COLORS[name] || '#64748b',
+  }))
 
-  const typeData = summary
-    ? Object.entries(summary.incidents_by_type).map(([name, value]) => ({
-        name: name
-          .replace(/_/g, ' ')
-          .split(' ')
-          .map((w) => w[0])
-          .join(''),
-        fullName: name.replace(/_/g, ' '),
-        value,
-      }))
-    : []
+  const maxVal = Math.max(...severityData.map((d) => d.value), 4)
+  const criticalHigh = (summary?.critical_count ?? 0) + (summary?.high_count ?? 0)
 
   return (
-    <div className="relative p-6 space-y-6 animate-fade-in overflow-hidden">
-      <InvestigationBlocksBackground />
-      <div className="relative z-10 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="mx-auto max-w-7xl p-5 sm:p-8">
+      {/* ── Dashboard Header ── */}
+      <header className="mb-7 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-ink">SOC Dashboard</h1>
-          <p className="text-slate-600 text-sm mt-1">Real-time security incident monitoring</p>
+          <h1 className="text-2xl font-semibold tracking-tight text-[#111827]">Dashboard</h1>
+          <p className="mt-1 text-sm text-[#667085]">Security operations overview</p>
         </div>
-        <BorderBeam size="pulse-inner" colorVariant="colorful" theme="dark" strength={1} className="rounded-xl inline-flex">
-          <Link href="/upload-logs" className="btn-primary flex items-center gap-2">
-            <Upload className="w-4 h-4" />
-            Upload Logs
+        <div className="flex items-center gap-2.5">
+          <button
+            onClick={load}
+            className="btn-ghost"
+            aria-label="Refresh dashboard"
+          >
+            <RefreshCw className="mr-2 h-4 w-4 text-[#667085]" />
+            Refresh
+          </button>
+          <Link href="/upload-logs" className="btn-primary">
+            <Upload className="mr-2 h-4 w-4" />
+            Upload logs
           </Link>
-        </BorderBeam>
-      </div>
+        </div>
+      </header>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          title="Total Incidents"
+      {/* ── KPI Cards ── */}
+      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <MetricCard
+          label="Total incidents"
           value={summary?.total_incidents ?? 0}
-          icon={AlertTriangle}
-          color="bg-gradient-to-br from-red-500 to-red-600"
+          icon={ShieldAlert}
         />
-        <StatCard
-          title="Open Incidents"
+        <MetricCard
+          label="Open incidents"
           value={summary?.open_incidents ?? 0}
-          icon={Eye}
-          color="bg-gradient-to-br from-orange-500 to-orange-600"
+          icon={AlertTriangle}
+          accentColor="#ea580c"
         />
-        <StatCard
-          title="Critical"
-          value={summary?.critical_count ?? 0}
-          icon={Zap}
-          color="bg-gradient-to-br from-red-700 to-red-800"
-          subtitle="Highest priority"
-        />
-        <StatCard
-          title="Events Processed"
-          value={(summary?.events_processed_total ?? 0).toLocaleString()}
+        <MetricCard
+          label="Critical / high"
+          value={criticalHigh}
           icon={Activity}
-          color="bg-gradient-to-br from-sky-500 to-sky-600"
-          subtitle={`${summary?.events_flagged_total ?? 0} flagged`}
+          accentColor="#dc2626"
+          detail={`${summary?.critical_count ?? 0} critical · ${summary?.high_count ?? 0} high`}
         />
-      </div>
+        <MetricCard
+          label="Logs processed"
+          value={(summary?.events_processed_total ?? 0).toLocaleString()}
+          icon={BarChart3}
+          detail={`${summary?.events_flagged_total ?? 0} flagged`}
+        />
+      </section>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <BorderBeam size="pulse-inner" colorVariant="colorful" theme="dark" strength={1} className="rounded-2xl">
-          <div className="card p-5">
-            <h2 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-jade" />
-              Severity Distribution
-            </h2>
-            <ResponsiveContainer width="100%" height={180}>
-              <PieChart>
-                <Pie
-                  data={severityData}
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={70}
-                  dataKey="value"
-                  label={({ name, value }) => `${name}: ${value}`}
-                  labelLine={false}
-                >
-                  {severityData.map((entry, i) => (
-                    <Cell key={i} fill={entry.fill} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={{
-                    background: '#ffffff',
-                    border: '1px solid rgba(24,34,31,0.18)',
-                    borderRadius: '8px',
-                    color: '#18221f',
-                  }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
+      {/* ── Severity Chart + Investigation Queue ── */}
+      <section className="mt-6 grid gap-6 lg:grid-cols-[1.25fr_0.75fr]">
+        {/* Severity Chart */}
+        <div className="card flex flex-col justify-between p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-sm font-semibold text-[#111827]">Incidents by severity</h2>
+              <p className="mt-0.5 text-xs text-[#667085]">Current incident distribution</p>
+            </div>
+            <span className="inline-flex items-center rounded-md bg-[#f8fafc] border border-[#e6e8eb] px-2.5 py-1 text-xs font-semibold text-[#475467] tabular-nums">
+              {summary?.total_incidents ?? 0} total
+            </span>
           </div>
-        </BorderBeam>
-
-        <BorderBeam size="pulse-inner" colorVariant="colorful" theme="dark" strength={1} className="rounded-2xl">
-          <div className="card p-5">
-            <h2 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2">
-              <Shield className="w-4 h-4 text-jade" />
-              Incidents by Attack Type
-            </h2>
-            <ResponsiveContainer width="100%" height={180}>
-              <BarChart data={typeData} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
-                <XAxis dataKey="name" tick={{ fill: '#475569', fontSize: 11 }} />
-                <YAxis tick={{ fill: '#475569', fontSize: 11 }} />
-                <Tooltip
-                  contentStyle={{
-                    background: '#ffffff',
-                    border: '1px solid rgba(24,34,31,0.18)',
-                    borderRadius: '8px',
-                    color: '#18221f',
+          <div className="w-full pt-1">
+            <ResponsiveContainer width="100%" height={210}>
+              <BarChart
+                layout="vertical"
+                data={severityData}
+                margin={{ top: 8, right: 30, left: 75, bottom: 8 }}
+                barCategoryGap="20%"
+              >
+                <XAxis type="number" hide domain={[0, maxVal]} />
+                <YAxis
+                  type="category"
+                  dataKey="name"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={({ x, y, payload }) => {
+                    const color = SEVERITY_COLORS[payload.value] || '#64748b'
+                    return (
+                      <g transform={`translate(${x},${y})`}>
+                        <circle cx={-68} cy={0} r={3.5} fill={color} />
+                        <text
+                          x={-56}
+                          y={0}
+                          dy={4}
+                          textAnchor="start"
+                          fill="#374151"
+                          fontSize={11}
+                          fontWeight={600}
+                        >
+                          {payload.value}
+                        </text>
+                      </g>
+                    )
                   }}
-                  formatter={(value: number, _name, props) => [value, props.payload?.fullName || '']}
                 />
-                <Bar dataKey="value" fill="#7FBF9A" radius={[4, 4, 0, 0]} />
+                <Tooltip
+                  cursor={{ fill: 'rgba(248, 250, 252, 0.6)' }}
+                  content={({ active, payload }) => {
+                    if (active && payload && payload.length) {
+                      const data = payload[0].payload
+                      return (
+                        <div className="rounded-lg border border-[#e6e8eb] bg-white p-2.5 shadow-sm text-xs">
+                          <div className="flex items-center gap-1.5 font-semibold text-[#111827]">
+                            <span
+                              className="h-2 w-2 rounded-full"
+                              style={{ backgroundColor: data.fill }}
+                            />
+                            {data.name}
+                          </div>
+                          <p className="mt-1 text-xs text-[#475467]">
+                            <span className="font-bold text-[#111827]">{data.value}</span>{' '}
+                            {data.value === 1 ? 'incident' : 'incidents'}
+                          </p>
+                        </div>
+                      )
+                    }
+                    return null
+                  }}
+                />
+                <Bar
+                  dataKey="value"
+                  radius={[0, 4, 4, 0]}
+                  barSize={12}
+                  background={{ fill: '#f1f5f9', radius: 4 }}
+                  isAnimationActive={true}
+                  animationDuration={600}
+                  animationEasing="ease-out"
+                >
+                  {severityData.map((entry) => (
+                    <Cell key={entry.name} fill={entry.fill} />
+                  ))}
+                  <LabelList
+                    dataKey="value"
+                    position="right"
+                    fill="#111827"
+                    fontSize={12}
+                    fontWeight={700}
+                    offset={10}
+                  />
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
-        </BorderBeam>
-      </div>
-
-      <BorderBeam size="pulse-inner" colorVariant="colorful" theme="dark" strength={1} className="rounded-2xl">
-        <div className="card">
-          <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-black/10">
-            <h2 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-jade" />
-              Recent Incidents
-            </h2>
-            <Link href="/incidents" className="text-xs text-slate-600 hover:text-ink transition-colors">
-              View all {`->`}
-            </Link>
-          </div>
-          <div className="p-2">
-            {summary?.recent_incidents.length ? (
-              summary.recent_incidents.map((inc) => <IncidentRow key={inc.id} incident={inc} />)
-            ) : (
-              <div className="text-center py-12 text-slate-500">
-                <Shield className="w-8 h-8 mx-auto mb-2 opacity-40" />
-                <p className="text-sm">No incidents yet.</p>
-                <p className="text-xs mt-1">Upload log files to start detection.</p>
-              </div>
-            )}
-          </div>
         </div>
-      </BorderBeam>
-      </div>
+
+        {/* Investigation Queue */}
+        <div className="card flex flex-col justify-between p-5">
+          <div>
+            <div className="flex items-center justify-between border-b border-[#f0f1f3] pb-3.5">
+              <div>
+                <h2 className="text-sm font-semibold text-[#111827]">Investigation queue</h2>
+                <p className="mt-0.5 text-xs text-[#667085]">Prioritize open work by severity</p>
+              </div>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-[#bbf7d0] bg-[#f0fdf4] px-2.5 py-0.5 text-xs font-medium text-[#168a52]">
+                <span className="h-1.5 w-1.5 rounded-full bg-[#168a52]" />
+                Active
+              </span>
+            </div>
+
+            <div className="divide-y divide-[#f0f1f3] text-sm">
+              <div className="flex items-center justify-between py-3">
+                <div className="flex items-center gap-2.5">
+                  <span className="h-2 w-2 rounded-full bg-[#dc2626]" />
+                  <span className="text-xs font-medium text-[#475467]">Critical incidents</span>
+                </div>
+                <span className="text-sm font-bold tabular-nums text-[#dc2626]">
+                  {summary?.critical_count ?? 0}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between py-3">
+                <div className="flex items-center gap-2.5">
+                  <span className="h-2 w-2 rounded-full bg-[#ea580c]" />
+                  <span className="text-xs font-medium text-[#475467]">Open incidents</span>
+                </div>
+                <span className="text-sm font-bold tabular-nums text-[#111827]">
+                  {summary?.open_incidents ?? 0}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between py-3">
+                <div className="flex items-center gap-2.5">
+                  <span className="h-2 w-2 rounded-full bg-[#2563eb]" />
+                  <span className="text-xs font-medium text-[#475467]">Flagged events</span>
+                </div>
+                <span className="text-sm font-bold tabular-nums text-[#111827]">
+                  {summary?.events_flagged_total ?? 0}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <Link
+            href="/incidents"
+            className="btn-ghost mt-4 w-full justify-center text-xs font-medium text-[#344054] hover:border-[#b4c3b9] hover:text-[#111827]"
+          >
+            Review incidents <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+          </Link>
+        </div>
+      </section>
+
+      {/* ── Recent Incidents Table ── */}
+      <section className="card mt-6 overflow-hidden">
+        <div className="flex items-center justify-between border-b border-[#e6e8eb] px-6 py-4 bg-white">
+          <div>
+            <h2 className="text-sm font-semibold text-[#111827]">Recent incidents</h2>
+            <p className="mt-0.5 text-xs text-[#667085]">Latest detected security events</p>
+          </div>
+          <Link
+            href="/incidents"
+            className="inline-flex items-center text-xs font-semibold text-[#168a52] hover:text-[#116f42] hover:underline"
+          >
+            View all <ArrowRight className="ml-1 h-3.5 w-3.5" />
+          </Link>
+        </div>
+        {summary?.recent_incidents.length ? (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[760px] text-left">
+              <thead className="bg-[#fafbfc] text-[11px] font-semibold uppercase tracking-wider text-[#667085] border-b border-[#e6e8eb]">
+                <tr>
+                  <th className="px-6 py-3">ID</th>
+                  <th className="px-6 py-3">Incident</th>
+                  <th className="px-6 py-3">Severity</th>
+                  <th className="px-6 py-3">Affected entity</th>
+                  <th className="px-6 py-3">Time</th>
+                  <th className="px-6 py-3">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#f0f1f3] bg-white">
+                {summary.recent_incidents.map((incident) => (
+                  <IncidentRow key={incident.id} incident={incident} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="p-12 text-center">
+            <p className="text-sm font-medium text-[#111827]">No incidents detected</p>
+            <p className="mt-1 text-xs text-[#667085]">
+              Upload security logs to begin automatic detection and correlation.
+            </p>
+          </div>
+        )}
+      </section>
     </div>
   )
 }
+

@@ -1,6 +1,7 @@
 /**
  * Typed API client — wraps all backend endpoints with proper TypeScript types.
- * Token is stored in localStorage under 'soc_token'.
+ * The API is unauthenticated for this MVP. A token is included only when one
+ * already exists, preserving compatibility with deployments that provide it.
  */
 
 import type {
@@ -15,7 +16,6 @@ import type {
   ReportOut,
   SecurityEventListResponse,
   SessionCreateResponse,
-  TokenResponse,
 } from './types'
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
@@ -39,27 +39,12 @@ async function request<T>(
     },
   })
 
-  if (res.status === 401) {
-    localStorage.removeItem('soc_token')
-    window.location.href = '/login'
-    throw new Error('Unauthorized')
-  }
-
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
     throw new Error(err.detail || 'Request failed')
   }
 
   return res.json()
-}
-
-// ─── Auth ─────────────────────────────────────────────────────────────────
-
-export async function login(email: string, password: string): Promise<TokenResponse> {
-  return request<TokenResponse>('/api/auth/login', {
-    method: 'POST',
-    body: JSON.stringify({ email, password }),
-  })
 }
 
 // ─── Dashboard ────────────────────────────────────────────────────────────

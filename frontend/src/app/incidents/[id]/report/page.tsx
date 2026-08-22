@@ -1,130 +1,268 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { ChevronLeft, FileText, Download, Loader2, AlertTriangle } from 'lucide-react'
-import { createReport, getReport, getReportDownloadUrl } from '@/lib/api'
-import type { ReportOut } from '@/lib/types'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import { AlertTriangle, ChevronLeft, Download, FileText, Loader2, Printer } from 'lucide-react'
 import { format } from 'date-fns'
+import { createReport, getReport } from '@/lib/api'
+import type { ReportOut } from '@/lib/types'
+import React, { Fragment, type ReactNode } from 'react'
 
-export default function ReportPage({ params }: { params: { id: string } }) {
+/**
+ * Replace [EV-NNN] tokens in text with styled evidence chips.
+ */
+function renderWithEvidence(children: ReactNode): ReactNode {
+  if (typeof children === 'string') {
+    const parts = children.split(/(\[EV-\d{3,}\])/g)
+    if (parts.length === 1) return children
+    return (
+      <>
+        {parts.map((part, i) =>
+          /^\[EV-\d{3,}\]$/.test(part) ? (
+            <span key={i} className="evidence-chip">{part}</span>
+          ) : (
+            <Fragment key={i}>{part}</Fragment>
+          )
+        )}
+      </>
+    )
+  }
+  if (Array.isArray(children)) {
+    return children.map((child, i) => (
+      <Fragment key={i}>{renderWithEvidence(child)}</Fragment>
+    ))
+  }
+  return children
+}
+
+export default function ReportPage({ params }: { params: Promise<{ id: string }> }) {
   const [report, setReport] = useState<ReportOut | null>(null)
-  const [loading, setLoading] = useState(false)
   const [generating, setGenerating] = useState(false)
+  const [downloadingPdf, setDownloadingPdf] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [incidentId, setIncidentId] = useState('')
+  const reportRef = useRef<HTMLElement>(null)
 
-  const handleGenerate = async () => {
+  useEffect(() => {
+    params.then(({ id }) => setIncidentId(id))
+  }, [params])
+
+  const generate = async () => {
+    const { id } = await params
     setGenerating(true)
     setError(null)
     try {
-      const { report_id } = await createReport(params.id, { format: 'MARKDOWN' })
-      const rep = await getReport(report_id)
-      setReport(rep)
-    } catch (e: any) {
-      setError(e.message)
+      const created = await createReport(id, { format: 'MARKDOWN' })
+      setReport(await getReport(created.report_id))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unable to generate report')
     } finally {
       setGenerating(false)
     }
   }
 
-  // Simple markdown renderer with syntax highlighting for code blocks
-  const renderMarkdown = (md: string) => {
-    return md
-      .split('\n')
-      .map((line, i) => {
-        if (line.startsWith('# '))  return <h1 key={i} className="text-2xl font-bold text-white mt-6 mb-3 border-b border-border pb-2">{line.slice(2)}</h1>
-        if (line.startsWith('## ')) return <h2 key={i} className="text-lg font-semibold text-slate-200 mt-5 mb-2">{line.slice(3)}</h2>
-        if (line.startsWith('### '))return <h3 key={i} className="text-sm font-semibold text-slate-300 mt-4 mb-1">{line.slice(4)}</h3>
-        if (line.startsWith('| '))  return <div key={i} className="font-mono text-xs text-slate-400 border-b border-border/30 py-1 px-2">{line}</div>
-        if (line.startsWith('- '))  return <li key={i} className="text-slate-400 text-sm ml-4 py-0.5 list-disc">{line.slice(2)}</li>
-        if (line.startsWith('> '))  return <blockquote key={i} className="border-l-2 border-accent-blue pl-3 text-slate-400 text-sm italic my-1">{line.slice(2)}</blockquote>
-        if (line.match(/^\d+\. /)) return <li key={i} className="text-slate-400 text-sm ml-4 py-0.5 list-decimal">{line.replace(/^\d+\. /, '')}</li>
-        if (line === '---') return <hr key={i} className="border-border my-4" />
-        if (line === '') return <div key={i} className="h-2" />
-        return <p key={i} className="text-slate-400 text-sm leading-relaxed">{line}</p>
-      })
+  const downloadPdf = async () => {
+    if (!reportRef.current || !report || downloadingPdf) return
+
+    setDownloadingPdf(true)
+    setError(null)
+
+    try {
+      // Dynamic import — html2pdf.js is a client-only library
+      const html2pdf = (await import('html2pdf.js')).default
+
+      // Make the print footer visible during PDF generation
+      const footer = reportRef.current.querySelector('.ir-print-footer') as HTMLElement | null
+      if (footer) footer.style.display = 'block'
+
+      const filename = `SOC_Investigator_Incident_${report.incident_id}.pdf`
+
+      await html2pdf()
+        .set({
+          margin: [12, 14, 12, 14],  // mm: top, left, bottom, right
+          filename,
+          image: { type: 'jpeg', quality: 0.98 },
+          html2canvas: {
+            scale: 2,
+            useCORS: true,
+            letterRendering: true,
+            logging: false,
+          },
+          jsPDF: {
+            unit: 'mm',
+            format: 'a4',
+            orientation: 'portrait',
+          },
+          pagebreak: {
+            mode: ['css', 'legacy'],
+            avoid: [
+              '.ir-subsection-title',
+              '.ir-blockquote',
+              '.ir-code-block',
+              '.ir-tr',
+              '.ir-evidence-block',
+            ],
+          },
+        })
+        .from(reportRef.current)
+        .save()
+
+      // Hide the footer again after generation
+      if (footer) footer.style.display = ''
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to generate PDF')
+    } finally {
+      setDownloadingPdf(false)
+    }
   }
 
   return (
-    <div className="p-6 max-w-4xl mx-auto animate-fade-in">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <Link href={`/incidents/${params.id}`} className="text-slate-400 hover:text-slate-200 transition-colors">
-            <ChevronLeft className="w-5 h-5" />
-          </Link>
-          <div>
-            <h1 className="text-xl font-bold text-white flex items-center gap-2">
-              <FileText className="w-5 h-5 text-accent-cyan" />
-              Incident Report
-            </h1>
-            {report && (
-              <p className="text-xs text-slate-500 mt-0.5">
-                Generated {format(new Date(report.generated_at), 'yyyy-MM-dd HH:mm')} UTC
-              </p>
-            )}
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {report && (
-            <a
-              href={getReportDownloadUrl(report.id)}
-              download
-              className="btn-ghost flex items-center gap-2"
-            >
-              <Download className="w-4 h-4" />
-              Download .md
-            </a>
-          )}
-          <button
-            onClick={handleGenerate}
-            disabled={generating}
-            className="btn-primary flex items-center gap-2"
+    <div className="mx-auto max-w-4xl p-5 sm:p-8">
+
+      {/* ── Actions bar (hidden in print) ── */}
+      <div className="flex flex-wrap items-center justify-between gap-4 print:hidden">
+        <div>
+          <Link
+            href={`/incidents/${incidentId}`}
+            className="inline-flex items-center text-sm text-[#667085] hover:text-[#111827]"
           >
+            <ChevronLeft className="mr-1 h-4 w-4" />Incident
+          </Link>
+          <h1 className="mt-2 text-2xl font-semibold tracking-[-.02em] text-[#111827]">
+            Incident report
+          </h1>
+          {report && (
+            <p className="mt-1 text-sm text-[#667085]">
+              Generated {format(new Date(report.generated_at), 'yyyy-MM-dd HH:mm')} UTC
+            </p>
+          )}
+        </div>
+        <div className="flex gap-2">
+          {report && (
+            <>
+              <button
+                onClick={downloadPdf}
+                disabled={downloadingPdf}
+                className="btn-ghost"
+              >
+                {downloadingPdf ? (
+                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Generating PDF…</>
+                ) : (
+                  <><Download className="mr-2 h-4 w-4" />Download PDF</>
+                )}
+              </button>
+              <button onClick={() => window.print()} className="btn-ghost">
+                <Printer className="mr-2 h-4 w-4" />Print / PDF
+              </button>
+            </>
+          )}
+          <button onClick={generate} disabled={generating} className="btn-primary">
             {generating ? (
-              <><Loader2 className="w-4 h-4 animate-spin" /> Generating...</>
+              <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Generating</>
             ) : (
-              <><FileText className="w-4 h-4" /> {report ? 'Regenerate' : 'Generate Report'}</>
+              <><FileText className="mr-2 h-4 w-4" />{report ? 'Regenerate' : 'Generate report'}</>
             )}
           </button>
         </div>
       </div>
 
-      {/* Error */}
+      {/* ── Error ── */}
       {error && (
-        <div className="p-4 rounded-lg bg-red-950/40 border border-red-800/50 flex items-center gap-3 mb-4">
-          <AlertTriangle className="w-5 h-5 text-red-400" />
-          <span className="text-red-400 text-sm">{error}</span>
+        <div className="mt-5 flex gap-3 rounded-xl border border-[#fecaca] bg-[#fef2f2] p-4 text-sm text-[#b42318] print:hidden">
+          <AlertTriangle className="h-5 w-5 shrink-0" />{error}
         </div>
       )}
 
-      {/* Report content */}
+      {/* ── Empty state ── */}
       {!report && !generating && (
-        <div className="card p-16 text-center">
-          <FileText className="w-12 h-12 text-slate-600 mx-auto mb-4" />
-          <h2 className="text-slate-300 font-semibold mb-2">No report generated yet</h2>
-          <p className="text-slate-500 text-sm mb-6">
-            Generate a comprehensive incident report with evidence timeline, MITRE mappings, and recommended actions.
+        <div className="card mt-6 p-12 text-center print:hidden">
+          <FileText className="mx-auto h-9 w-9 text-[#667085]" />
+          <p className="mt-3 text-sm font-medium text-[#111827]">No report generated</p>
+          <p className="mt-1 text-sm text-[#667085]">
+            Create an evidence-based incident report when you are ready.
           </p>
-          <button onClick={handleGenerate} className="btn-primary">
-            Generate Report
-          </button>
         </div>
       )}
 
+      {/* ── Generating spinner ── */}
       {generating && (
-        <div className="card p-16 text-center">
-          <div className="w-8 h-8 border-2 border-accent-cyan border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-slate-400">Assembling incident data and generating report...</p>
+        <div className="card mt-6 p-12 text-center text-sm text-[#667085] print:hidden">
+          <Loader2 className="mx-auto mb-3 h-6 w-6 animate-spin text-[#168a52]" />
+          Assembling incident data…
         </div>
       )}
 
+      {/* ── Report content ── */}
       {report && (
-        <div className="card p-6">
-          <div className="prose-sm">
-            {renderMarkdown(report.content)}
+        <article
+          ref={reportRef}
+          className="incident-report card mt-6 p-6 sm:p-8 print:mt-0 print:border-none print:shadow-none print:p-0"
+        >
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={{
+              h1: ({ children }) => (
+                <h1 className="ir-report-title">{children}</h1>
+              ),
+              h2: ({ children }) => (
+                <h2 className="ir-section-title">{children}</h2>
+              ),
+              h3: ({ children }) => (
+                <h3 className="ir-subsection-title">{renderWithEvidence(children)}</h3>
+              ),
+              p: ({ children }) => (
+                <p className="ir-body">{renderWithEvidence(children)}</p>
+              ),
+              ul: ({ children }) => <ul className="ir-ul">{children}</ul>,
+              ol: ({ children }) => <ol className="ir-ol">{children}</ol>,
+              li: ({ children }) => (
+                <li className="ir-li">{renderWithEvidence(children)}</li>
+              ),
+              strong: ({ children }) => (
+                <strong className="ir-strong">{renderWithEvidence(children)}</strong>
+              ),
+              em: ({ children }) => <em className="ir-em">{children}</em>,
+              table: ({ children }) => (
+                <div className="ir-table-wrap">
+                  <table className="ir-table">{children}</table>
+                </div>
+              ),
+              thead: ({ children }) => <thead className="ir-thead">{children}</thead>,
+              tbody: ({ children }) => <tbody>{children}</tbody>,
+              tr: ({ children }) => <tr className="ir-tr">{children}</tr>,
+              th: ({ children }) => <th className="ir-th">{children}</th>,
+              td: ({ children }) => <td className="ir-td">{renderWithEvidence(children)}</td>,
+              blockquote: ({ children }) => (
+                <blockquote className="ir-blockquote">{children}</blockquote>
+              ),
+              code: ({ children, className }) => {
+                if (className) {
+                  return (
+                    <pre className="ir-code-block">
+                      <code className={className}>{children}</code>
+                    </pre>
+                  )
+                }
+                return <code className="ir-inline-code">{children}</code>
+              },
+              pre: ({ children }) => <>{children}</>,
+              hr: () => <hr className="ir-hr" />,
+            }}
+          >
+            {report.content
+              .replace(/---\s*\n\*\s*Automatically generated by SOC Investigator[\s\S]*$/i, '')
+              .replace(/---\s*\n\*Evidence citations are traceable[\s\S]*$/i, '')
+              .trim()}
+          </ReactMarkdown>
+
+          {/* ── Print footer (visible in print and during PDF generation) ── */}
+          <div className="ir-print-footer">
+            <p>SOC Investigator · Incident ID: {report.incident_id}</p>
+            <p>Confidential — Security Investigation Report</p>
           </div>
-        </div>
+        </article>
       )}
     </div>
   )

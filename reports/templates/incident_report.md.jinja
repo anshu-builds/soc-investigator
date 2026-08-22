@@ -1,21 +1,28 @@
-# Incident Report Template
-# Jinja2 template for Markdown report generation
+{#- SOC Investigator — Incident Investigation Report -#}
+{#- This template produces clean semantic Markdown.   -#}
+{#- All data preparation happens in Python.            -#}
 
-# {{ incident.title }}
+# SOC Investigator — Incident Investigation Report
 
-**Report Generated:** {{ report_generated_at }}
-**Incident ID:** {{ incident.id }}
-**Status:** {{ incident.status }}
+**Incident:** {{ incident.title }}
+
+| | |
+|---|---|
+| **Severity** | {{ incident.severity }} |
+| **Status** | {{ incident.status }} |
+| **Confidence** | {{ "%.0f"|format(incident.confidence * 100) }}% |
+| **Report Generated** | {{ report_generated_at }} |
+| **Incident ID** | `{{ incident.id }}` |
 
 ---
 
-## Executive Summary
+## 1. Executive Summary
 
 {{ ai_summary or narrative }}
 
 ---
 
-## Incident Details
+## 2. Incident Overview
 
 | Field | Value |
 |---|---|
@@ -23,6 +30,7 @@
 | **Confidence** | {{ "%.0f"|format(incident.confidence * 100) }}% |
 | **Attack Type** | {{ incident.attack_type }} |
 | **Affected User** | {{ incident.affected_username or "N/A" }} |
+| **Affected Host** | {{ incident.affected_host or "N/A" }} |
 | **Attacking Source** | {{ incident.source_ip or "N/A" }} |
 | **First Detected** | {{ incident.first_seen.strftime("%Y-%m-%d %H:%M:%S UTC") }} |
 | **Last Event** | {{ incident.last_seen.strftime("%Y-%m-%d %H:%M:%S UTC") }} |
@@ -30,55 +38,96 @@
 
 ---
 
-## MITRE ATT&CK Techniques
-
-{% for tech in techniques %}
-- **{{ tech.technique_id }}{% if tech.sub_technique_id %} ({{ tech.sub_technique_id }}){% endif %}**: {{ tech.technique_name }}
-  - Tactic: {{ tech.tactic }}
-  - Confidence: {{ "%.0f"|format(tech.confidence * 100) }}%
-  - Mapping: {{ tech.mapping_source }}
-{% endfor %}
-
----
-
-## Attack Timeline
+## 3. Attack Timeline
 
 {% for entry in timeline %}
-| {{ entry.sequence_order }} | {{ entry.timestamp.strftime("%H:%M:%S UTC") }} | {{ entry.phase }} | {{ entry.event_type }} | {{ entry.description }} |
+- **{{ entry.timestamp.strftime("%H:%M:%S UTC") }}** — {{ entry.phase }}{% if entry.event_type %} `{{ entry.event_type }}`{% endif %} — {{ entry.description }}
 {% endfor %}
 
 ---
 
-## Evidence Summary
+## 4. MITRE ATT&CK
 
-{% for ev in evidence %}
-**[EV-{{ "%03d"|format(loop.index) }}]** `{{ ev.role }}`
-- Time: {{ ev.event.timestamp.strftime("%Y-%m-%d %H:%M:%S UTC") if ev.event else "N/A" }}
-- Event Type: {{ ev.event.event_type if ev.event else "N/A" }}
-- Source IP: {{ ev.event.source_ip if ev.event else "N/A" }}
-- User: {{ ev.event.username or "N/A" if ev.event else "N/A" }}
-- Description: {{ ev.description or "" }}
-- Raw Log: `{{ ev.event.raw_log[:200] if ev.event else "" }}{% if ev.event and ev.event.raw_log|length > 200 %}...{% endif %}`
-
+{% for tech in techniques %}
+> **{{ tech.technique_id }}{% if tech.sub_technique_id %}.{{ tech.sub_technique_id.split('.')[-1] }}{% endif %}** — {{ tech.technique_name }}{% if tech.sub_technique_name %}: {{ tech.sub_technique_name }}{% endif %}
+>
+> Tactic: {{ tech.tactic }} · Confidence: {{ "%.0f"|format(tech.confidence * 100) }}%
 {% endfor %}
 
 ---
 
-## Recommended Actions
+## 5. Evidence
 
-{% if recommended_actions %}
+{% for group in evidence_groups %}
+{% if group.is_group %}
+### {{ group.event_type }} Pattern
+
+{{ group.count }} {{ group.event_type | lower }} events
+Source: {{ group.source_ip }} · Target: {{ group.username }}
+Time: {{ group.first_time.strftime("%H:%M:%S") }}–{{ group.last_time.strftime("%H:%M:%S UTC") }}
+Evidence: {{ group.label_range }}
+
+{% if group.raw_log_sample %}
+```
+{{ group.raw_log_sample }}
+```
+{% endif %}
+
+{% else %}
+### [{{ group.label }}] {{ group.role }}
+
+**Time:** {{ group.first_time.strftime("%Y-%m-%d %H:%M:%S UTC") if group.first_time else "N/A" }}
+**Event:** {{ group.event_type }}
+**Source:** {{ group.source_ip }}
+**User:** {{ group.username }}
+**Description:** {{ group.description }}
+
+{% if group.raw_log_sample %}
+```
+{{ group.raw_log_sample }}
+```
+{% endif %}
+
+{% endif %}
+{% endfor %}
+
+---
+
+## 6. Assessment
+
+### Observed Facts
+
+{% for group in evidence_groups %}
+{% if not group.is_group %}
+- {{ group.description }} ({{ group.label }})
+{% else %}
+- {{ group.count }} {{ group.event_type | lower }} events from {{ group.source_ip }} targeting {{ group.username }} ({{ group.label_range }})
+{% endif %}
+{% endfor %}
+
+### Analytical Assessment
+
+{{ ai_summary or narrative }}
+
+*This assessment is an analytical interpretation based on the cited evidence, not a directly observed fact.*
+
+---
+
+## 7. Recommended Actions
+
 {% for action in recommended_actions %}
 {{ loop.index }}. {{ action }}
 {% endfor %}
-{% else %}
-1. Investigate the source IP and block if confirmed malicious.
-2. Review and reset credentials for affected accounts.
-3. Enable MFA on all affected accounts.
-4. Review access logs for post-compromise activity.
-5. Conduct a full forensic review of affected systems.
-{% endif %}
 
 ---
 
-*This report was automatically generated by the SOC Investigator Platform.*
-*All evidence citations are traceable to raw log events in the database.*
+## 8. Confidence
+
+**{{ "%.0f"|format(incident.confidence * 100) }}%** — {% if incident.confidence >= 0.9 %}High{% elif incident.confidence >= 0.7 %}Moderate-High{% elif incident.confidence >= 0.5 %}Moderate{% else %}Low{% endif %}-confidence assessment based on the available evidence.
+
+---
+
+*Automatically generated by SOC Investigator Platform.*
+*Evidence citations are traceable to raw log events in the database.*
+*Incident ID: {{ incident.id }}*
+*Confidential — Security Investigation Report*

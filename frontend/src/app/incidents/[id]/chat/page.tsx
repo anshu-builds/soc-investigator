@@ -2,313 +2,49 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import {
-  ChevronLeft, Send, Bot, User as UserIcon, Database,
-  Shield, Lightbulb, CheckCircle, AlertCircle, Loader2
-} from 'lucide-react'
-import { createSession, sendMessage, getMessages, getIncident } from '@/lib/api'
+import { AlertCircle, Bot, ChevronLeft, Loader2, Send, User } from 'lucide-react'
+import { createSession, getIncident, sendMessage } from '@/lib/api'
 import type { ChatMessage, Incident } from '@/lib/types'
 import { SeverityBadge } from '@/components/ui/badges'
-import { MitreTechniqueChip } from '@/components/ui/badges'
-import { format } from 'date-fns'
+import { InvestigationReport } from '@/components/ui/InvestigationReport'
 
-const SUGGESTED_QUESTIONS = [
-  'What triggered this alert and when?',
-  'What happened after the successful login?',
-  'Which MITRE techniques were used?',
-  'What evidence supports the privilege escalation?',
-  'What are the recommended containment steps?',
-  'How confident are we this is real vs. false positive?',
-]
-
-const ANSWER_TYPE_CONFIG = {
-  FACTUAL:        { icon: CheckCircle,  color: 'text-green-400',  label: 'Evidence-Based' },
-  INFERENCE:      { icon: Lightbulb,   color: 'text-yellow-400', label: 'AI Inference' },
-  RECOMMENDATION: { icon: Shield,       color: 'text-blue-400',   label: 'Recommendation' },
-}
-
-function EvidenceCitation({ id, index }: { id: string; index: number }) {
-  return (
-    <span className="evidence-chip" title={id}>
-      EV-{String(index + 1).padStart(3, '0')}
-    </span>
-  )
-}
-
-function MessageBubble({
-  message,
-  evidenceMap,
-}: {
-  message: ChatMessage
-  evidenceMap: Map<string, number>
-}) {
+const SUGGESTIONS = ['What triggered this alert and when?', 'Which MITRE techniques were used?', 'What evidence supports this incident?', 'What are the recommended containment steps?']
+function Answer({ message }: { message: ChatMessage }) {
   const isUser = message.role === 'user'
-  const typeConfig = message.answer_type
-    ? ANSWER_TYPE_CONFIG[message.answer_type]
-    : null
-
-  // Render answer with clickable [EV-NNN] citations highlighted
-  const renderContent = (text: string) => {
-    const parts = text.split(/(\[EV-\d{3,}\])/g)
-    return parts.map((part, i) => {
-      if (part.match(/^\[EV-\d{3,}\]$/)) {
-        return (
-          <span key={i} className="evidence-chip mx-0.5 cursor-default" title="Evidence citation">
-            {part}
-          </span>
-        )
-      }
-      return <span key={i}>{part}</span>
-    })
-  }
-
   return (
-    <div className={`flex gap-3 animate-slide-in ${isUser ? 'justify-end' : 'justify-start'}`}>
+    <div className={`flex gap-3 ${isUser ? 'justify-end' : ''}`}>
       {!isUser && (
-        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-cyan-600 to-blue-700 flex items-center justify-center flex-shrink-0 mt-0.5 shadow-glow-sm">
-          <Bot className="w-4 h-4 text-white" />
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#f0f8f4] self-start mt-1">
+          <Bot className="h-4 w-4 text-[#168a52]" />
+        </span>
+      )}
+      {isUser ? (
+        <div className="max-w-[85%] rounded-xl px-4 py-3 text-sm leading-6 bg-[#168a52] text-white">
+          {message.content}
+        </div>
+      ) : (
+        <div className="flex-1 max-w-[85%] border border-[#e6e8eb] bg-white rounded-xl px-5 py-4">
+          <InvestigationReport
+            content={message.content}
+            answerType={message.answer_type}
+            confidence={message.ai_confidence}
+          />
         </div>
       )}
-
-      <div className={`max-w-[85%] ${isUser ? 'items-end' : 'items-start'} flex flex-col gap-1`}>
-        {/* Message bubble */}
-        <div className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
-          isUser
-            ? 'bg-accent-blue text-white rounded-tr-sm'
-            : 'bg-bg-card border border-border text-slate-200 rounded-tl-sm'
-        }`}>
-          {isUser ? (
-            <span>{message.content}</span>
-          ) : (
-            <div className="whitespace-pre-wrap">{renderContent(message.content)}</div>
-          )}
-        </div>
-
-        {/* Metadata row for assistant messages */}
-        {!isUser && (
-          <div className="flex items-center flex-wrap gap-2 px-1">
-            {/* Answer type */}
-            {typeConfig && (
-              <div className={`flex items-center gap-1 text-xs ${typeConfig.color}`}>
-                <typeConfig.icon className="w-3 h-3" />
-                {typeConfig.label}
-              </div>
-            )}
-
-            {/* Confidence */}
-            {message.ai_confidence !== undefined && (
-              <span className="text-xs text-slate-500">
-                {Math.round(message.ai_confidence * 100)}% confidence
-              </span>
-            )}
-
-            {/* MITRE references */}
-            {/* Evidence citation count */}
-            {message.evidence_ids && message.evidence_ids.length > 0 && (
-              <span className="text-xs text-cyan-500 flex items-center gap-1">
-                <Database className="w-3 h-3" />
-                {message.evidence_ids.length} evidence cited
-              </span>
-            )}
-
-            {/* Timestamp */}
-            <span className="text-xs text-slate-600">
-              {format(new Date(message.timestamp), 'HH:mm')}
-            </span>
-          </div>
-        )}
-      </div>
-
       {isUser && (
-        <div className="w-8 h-8 rounded-full bg-bg-tertiary border border-border flex items-center justify-center flex-shrink-0 mt-0.5">
-          <UserIcon className="w-4 h-4 text-slate-400" />
-        </div>
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#eaf4ee]">
+          <User className="h-4 w-4 text-[#168a52]" />
+        </span>
       )}
     </div>
   )
 }
 
-function TypingIndicator() {
-  return (
-    <div className="flex gap-3 justify-start animate-slide-in">
-      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-cyan-600 to-blue-700 flex items-center justify-center flex-shrink-0 shadow-glow-sm">
-        <Bot className="w-4 h-4 text-white" />
-      </div>
-      <div className="bg-bg-card border border-border rounded-2xl rounded-tl-sm px-4 py-3">
-        <div className="flex items-center gap-1">
-          {[0, 1, 2].map(i => (
-            <div key={i} className="w-1.5 h-1.5 rounded-full bg-slate-500 typing-dot" style={{ animationDelay: `${i * 0.2}s` }} />
-          ))}
-          <span className="ml-2 text-xs text-slate-500">Analyzing evidence...</span>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-export default function ChatPage({ params }: { params: { id: string } }) {
-  const [incident, setIncident] = useState<Incident | null>(null)
-  const [sessionId, setSessionId] = useState<string | null>(null)
-  const [messages, setMessages] = useState<ChatMessage[]>([])
-  const [input, setInput] = useState('')
-  const [sending, setSending] = useState(false)
-  const [initializing, setInitializing] = useState(true)
-  const bottomRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    Promise.all([
-      getIncident(params.id),
-      createSession(params.id),
-    ]).then(([inc, session]) => {
-      setIncident(inc)
-      setSessionId(session.session_id)
-    }).finally(() => setInitializing(false))
-  }, [params.id])
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, sending])
-
-  const handleSend = async () => {
-    if (!input.trim() || !sessionId || sending) return
-    const userMsg: ChatMessage = {
-      id: crypto.randomUUID(), session_id: sessionId, role: 'user',
-      content: input.trim(), timestamp: new Date().toISOString(),
-    }
-    setMessages(prev => [...prev, userMsg])
-    setInput('')
-    setSending(true)
-    try {
-      const res = await sendMessage(sessionId, userMsg.content)
-      const assistantMsg: ChatMessage = {
-        id: res.message_id, session_id: sessionId, role: 'assistant',
-        content: res.answer, evidence_ids: res.evidence_ids,
-        answer_type: res.answer_type, ai_confidence: res.confidence,
-        timestamp: new Date().toISOString(),
-      }
-      setMessages(prev => [...prev, assistantMsg])
-    } catch (e: any) {
-      setMessages(prev => [...prev, {
-        id: crypto.randomUUID(), session_id: sessionId, role: 'assistant',
-        content: `⚠️ Error: ${e.message}`, timestamp: new Date().toISOString(),
-      }])
-    } finally {
-      setSending(false)
-    }
-  }
-
-  if (initializing) return (
-    <div className="flex items-center justify-center h-screen">
-      <div className="text-center">
-        <div className="w-8 h-8 border-2 border-accent-cyan border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-        <p className="text-slate-400 text-sm">Initializing AI investigation session...</p>
-      </div>
-    </div>
-  )
-
-  return (
-    <div className="flex flex-col h-screen">
-      {/* Header */}
-      <div className="flex-shrink-0 px-5 py-4 border-b border-border bg-bg-secondary flex items-center gap-4">
-        <Link href={`/incidents/${params.id}`} className="text-slate-400 hover:text-slate-200 transition-colors">
-          <ChevronLeft className="w-5 h-5" />
-        </Link>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse-slow" />
-            <span className="text-sm font-semibold text-white truncate">
-              AI Investigation: {incident?.title}
-            </span>
-          </div>
-          {incident && (
-            <div className="flex items-center gap-2 mt-0.5">
-              <SeverityBadge severity={incident.severity} />
-              <span className="text-xs text-slate-500">{incident.attack_type.replace(/_/g, ' ')}</span>
-            </div>
-          )}
-        </div>
-        <div className="flex items-center gap-1.5 text-xs text-cyan-400 bg-cyan-950/30 border border-cyan-800/40 px-2.5 py-1 rounded-full">
-          <Bot className="w-3 h-3" />
-          Evidence-Grounded AI
-        </div>
-      </div>
-
-      {/* Chat area */}
-      <div className="flex-1 overflow-y-auto p-5 space-y-5">
-        {/* Welcome message */}
-        {messages.length === 0 && (
-          <div className="animate-fade-in">
-            <div className="flex gap-3">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-cyan-600 to-blue-700 flex items-center justify-center flex-shrink-0 shadow-glow-sm">
-                <Bot className="w-4 h-4 text-white" />
-              </div>
-              <div className="bg-bg-card border border-border rounded-2xl rounded-tl-sm px-4 py-3 max-w-lg">
-                <p className="text-sm text-slate-200 leading-relaxed">
-                  I'm analyzing <span className="text-cyan-400 font-medium">{incident?.title}</span>.
-                  Every answer I provide will cite specific evidence from the database using{' '}
-                  <span className="evidence-chip text-xs">[EV-NNN]</span> references — no invented facts.
-                </p>
-                <p className="text-xs text-slate-500 mt-2">Ask me anything about this incident.</p>
-              </div>
-            </div>
-
-            {/* Suggested questions */}
-            <div className="mt-4 ml-11">
-              <p className="text-xs text-slate-500 mb-2">Suggested questions:</p>
-              <div className="flex flex-wrap gap-2">
-                {SUGGESTED_QUESTIONS.map((q) => (
-                  <button
-                    key={q}
-                    onClick={() => setInput(q)}
-                    className="text-xs px-3 py-1.5 rounded-full bg-bg-tertiary border border-border hover:border-border-bright hover:text-slate-200 text-slate-400 transition-colors"
-                  >
-                    {q}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {messages.map((msg) => (
-          <MessageBubble key={msg.id} message={msg} evidenceMap={new Map()} />
-        ))}
-        {sending && <TypingIndicator />}
-        <div ref={bottomRef} />
-      </div>
-
-      {/* Input area */}
-      <div className="flex-shrink-0 px-5 py-4 border-t border-border bg-bg-secondary">
-        <div className="flex gap-3">
-          <div className="flex-1 relative">
-            <textarea
-              className="input w-full resize-none pr-12 py-3 min-h-[48px] max-h-32"
-              placeholder="Ask about this incident... (Enter to send, Shift+Enter for newline)"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
-              }}
-              rows={1}
-            />
-          </div>
-          <button
-            onClick={handleSend}
-            disabled={!input.trim() || sending}
-            className="w-12 h-12 rounded-xl bg-accent-blue hover:bg-blue-400 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center transition-colors flex-shrink-0"
-          >
-            {sending ? (
-              <Loader2 className="w-5 h-5 text-white animate-spin" />
-            ) : (
-              <Send className="w-5 h-5 text-white" />
-            )}
-          </button>
-        </div>
-        <div className="mt-2 flex items-center gap-1 text-xs text-slate-600">
-          <AlertCircle className="w-3 h-3" />
-          All answers cite real database evidence. AI inferences are labeled separately.
-        </div>
-      </div>
-    </div>
-  )
+export default function ChatPage({ params }: { params: Promise<{ id: string }> }) {
+  const [incident, setIncident] = useState<Incident | null>(null); const [session, setSession] = useState<string | null>(null); const [messages, setMessages] = useState<ChatMessage[]>([]); const [input, setInput] = useState(''); const [sending, setSending] = useState(false); const [loading, setLoading] = useState(true); const bottom = useRef<HTMLDivElement>(null)
+  useEffect(() => { params.then(({ id }) => Promise.all([getIncident(id), createSession(id)])).then(([nextIncident, nextSession]) => { setIncident(nextIncident); setSession(nextSession.session_id) }).finally(() => setLoading(false)) }, [params])
+  useEffect(() => { bottom.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages, sending])
+  const send = async () => { if (!input.trim() || !session || sending) return; const content = input.trim(); const userMessage: ChatMessage = { id: crypto.randomUUID(), session_id: session, role: 'user', content, timestamp: new Date().toISOString() }; setMessages((items) => [...items, userMessage]); setInput(''); setSending(true); try { const response = await sendMessage(session, content); setMessages((items) => [...items, { id: response.message_id, session_id: session, role: 'assistant', content: response.answer, evidence_ids: response.evidence_ids, answer_type: response.answer_type, ai_confidence: response.confidence, timestamp: new Date().toISOString() }]) } catch (e) { setMessages((items) => [...items, { id: crypto.randomUUID(), session_id: session, role: 'assistant', content: `Unable to complete investigation: ${e instanceof Error ? e.message : 'Unknown error'}`, timestamp: new Date().toISOString() }]) } finally { setSending(false) } }
+  if (loading) return <div className="flex min-h-screen items-center justify-center text-sm text-[#667085]"><Loader2 className="mr-2 h-4 w-4 animate-spin text-[#168a52]" />Preparing investigation…</div>
+  return <div className="flex min-h-screen flex-col"><header className="border-b border-[#e6e8eb] bg-white px-5 py-4 sm:px-8"><Link href={`/incidents/${incident?.id || ''}`} className="inline-flex items-center text-sm text-[#667085] hover:text-[#111827]"><ChevronLeft className="mr-1 h-4 w-4" />Incident</Link><div className="mt-2 flex flex-wrap items-center gap-2"><h1 className="text-lg font-semibold text-[#111827]">Investigation</h1>{incident && <SeverityBadge severity={incident.severity} />}<span className="text-sm text-[#667085]">{incident?.title}</span></div></header><main className="mx-auto flex w-full max-w-4xl flex-1 flex-col p-5 sm:p-8"><div className="flex-1 space-y-5">{messages.length === 0 && <div className="card p-5"><div className="flex gap-3"><Bot className="mt-0.5 h-5 w-5 shrink-0 text-[#168a52]" /><div><p className="text-sm leading-6 text-[#344054]">Ask questions about this incident. Answers cite available database evidence and label inferences separately.</p><div className="mt-4 flex flex-wrap gap-2">{SUGGESTIONS.map((question) => <button key={question} onClick={() => setInput(question)} className="btn-ghost !px-3 !py-1.5 !text-xs">{question}</button>)}</div></div></div></div>}{messages.map((message) => <Answer key={message.id} message={message} />)}{sending && <div className="flex gap-3"><span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#f0f8f4]"><Bot className="h-4 w-4 text-[#168a52]" /></span><div className="rounded-xl border border-[#e6e8eb] bg-white px-4 py-3 text-sm text-[#667085]">Analyzing evidence…</div></div>}<div ref={bottom} /></div><div className="sticky bottom-0 mt-5 border-t border-[#e6e8eb] bg-[#f7f8fa] pt-4"><div className="flex gap-3"><textarea value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }} className="input min-h-[48px] flex-1 resize-none" placeholder="Ask about this incident…" rows={1} /><button onClick={send} disabled={!input.trim() || sending} className="btn-primary self-end" aria-label="Send message"><Send className="h-4 w-4" /></button></div><p className="mt-2 flex items-center gap-1 text-xs text-[#667085]"><AlertCircle className="h-3.5 w-3.5" />Enter sends; Shift + Enter adds a line.</p></div></main></div>
 }
