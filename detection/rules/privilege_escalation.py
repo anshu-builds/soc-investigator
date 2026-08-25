@@ -1,20 +1,3 @@
-"""
-Rule 3: Privilege Escalation Detection
-
-Logic:
-  - PRIV_CHANGE event for a username within 30 minutes of AUTH_SUCCESS
-  - Optional uplift: PRIV_CHANGE + FILE_ACCESS to sensitive paths
-
-Confidence:
-  - PRIV_CHANGE alone:                          0.65
-  - PRIV_CHANGE + FILE_ACCESS to sensitive path: 0.80
-  - PRIV_CHANGE after account compromise alert:  0.90
-
-Severity:
-  - PRIV_CHANGE only:          HIGH
-  - PRIV_CHANGE post-compromise: CRITICAL
-"""
-
 from __future__ import annotations
 
 import uuid
@@ -47,7 +30,6 @@ class PrivilegeEscalationRule(BaseRule):
     ) -> List[Alert]:
         alerts: List[Alert] = []
 
-        # Group events by username
         by_user: Dict[Optional[str], List[NormalizedEvent]] = defaultdict(list)
         for event in events:
             by_user[event.username].append(event)
@@ -67,10 +49,8 @@ class PrivilegeEscalationRule(BaseRule):
             if not priv_changes:
                 continue
 
-            # Group all PRIV_CHANGE events for this user into one alert
             first_priv = priv_changes[0]
 
-            # Look for AUTH_SUCCESS in the window before the FIRST PRIV_CHANGE
             preceding_success = [
                 s for s in auth_successes
                 if s.timestamp <= first_priv.timestamp
@@ -79,7 +59,6 @@ class PrivilegeEscalationRule(BaseRule):
 
             trigger_success = preceding_success[-1] if preceding_success else None
 
-            # Check for sensitive FILE_ACCESS after the FIRST PRIV_CHANGE
             post_priv_file_accesses = [
                 f for f in file_accesses
                 if f.timestamp >= first_priv.timestamp
@@ -154,9 +133,9 @@ class PrivilegeEscalationRule(BaseRule):
         confidence = 0.65
 
         if sensitive_accesses:
-            confidence += 0.15  # → 0.80
+            confidence += 0.15
 
         if len(preceding_successes) >= 1:
-            confidence += 0.10  # There was a recent login → more suspicious
+            confidence += 0.10
 
         return min(confidence, 0.92)

@@ -1,7 +1,3 @@
-"""
-SQLAlchemy ORM Models — all 8 database tables.
-"""
-
 from __future__ import annotations
 
 import uuid
@@ -25,8 +21,6 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-# ─── Users ────────────────────────────────────────────────────────────────────
-
 class User(Base):
     __tablename__ = "users"
 
@@ -38,8 +32,6 @@ class User(Base):
 
     sessions = relationship("InvestigationSession", back_populates="analyst")
 
-
-# ─── Security Events ─────────────────────────────────────────────────────────
 
 class SecurityEvent(Base):
     __tablename__ = "security_events"
@@ -64,8 +56,6 @@ class SecurityEvent(Base):
     incident         = relationship("Incident", back_populates="events", foreign_keys=[incident_id])
     evidence_links   = relationship("Evidence", back_populates="event")
 
-
-# ─── Incidents ───────────────────────────────────────────────────────────────
 
 class Incident(Base):
     __tablename__ = "incidents"
@@ -94,15 +84,13 @@ class Incident(Base):
     reports           = relationship("Report", back_populates="incident", cascade="all, delete-orphan")
 
 
-# ─── Evidence ─────────────────────────────────────────────────────────────────
-
 class Evidence(Base):
     __tablename__ = "evidence"
 
     id              = Column(UUID(as_uuid=True), primary_key=True, default=_uuid)
     incident_id     = Column(UUID(as_uuid=True), ForeignKey("incidents.id", ondelete="CASCADE"), nullable=False, index=True)
     event_id        = Column(UUID(as_uuid=True), ForeignKey("security_events.id", ondelete="CASCADE"), nullable=False)
-    role            = Column(String(100), nullable=False)   # TRIGGER_EVENT / SUPPORTING_EVENT / COMPROMISE_INDICATOR
+    role            = Column(String(100), nullable=False)
     description     = Column(Text, nullable=True)
     sequence_order  = Column(Integer, nullable=True)
     created_at      = Column(DateTime(timezone=True), nullable=False, default=_now)
@@ -110,8 +98,6 @@ class Evidence(Base):
     incident        = relationship("Incident", back_populates="evidence")
     event           = relationship("SecurityEvent", back_populates="evidence_links")
 
-
-# ─── Attack Techniques ────────────────────────────────────────────────────────
 
 class AttackTechnique(Base):
     __tablename__ = "attack_techniques"
@@ -130,8 +116,6 @@ class AttackTechnique(Base):
     incident           = relationship("Incident", back_populates="techniques")
 
 
-# ─── Investigation Sessions ───────────────────────────────────────────────────
-
 class InvestigationSession(Base):
     __tablename__ = "investigation_sessions"
 
@@ -145,25 +129,21 @@ class InvestigationSession(Base):
     messages    = relationship("ChatMessage", back_populates="session", cascade="all, delete-orphan")
 
 
-# ─── Chat Messages ────────────────────────────────────────────────────────────
-
 class ChatMessage(Base):
     __tablename__ = "chat_messages"
 
     id              = Column(UUID(as_uuid=True), primary_key=True, default=_uuid)
     session_id      = Column(UUID(as_uuid=True), ForeignKey("investigation_sessions.id", ondelete="CASCADE"), nullable=False, index=True)
-    role            = Column(String(20), nullable=False)    # "user" or "assistant"
+    role            = Column(String(20), nullable=False)
     content         = Column(Text, nullable=False)
-    evidence_ids    = Column(JSONB, nullable=True)          # List of evidence UUIDs cited
+    evidence_ids    = Column(JSONB, nullable=True)
     rag_chunks_used = Column(JSONB, nullable=True)
-    answer_type     = Column(String(20), nullable=True)     # FACTUAL / INFERENCE / RECOMMENDATION
+    answer_type     = Column(String(20), nullable=True)
     ai_confidence   = Column(Float, nullable=True)
     timestamp       = Column(DateTime(timezone=True), nullable=False, default=_now)
 
     session         = relationship("InvestigationSession", back_populates="messages")
 
-
-# ─── Reports ─────────────────────────────────────────────────────────────────
 
 class Report(Base):
     __tablename__ = "reports"

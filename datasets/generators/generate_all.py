@@ -1,16 +1,3 @@
-"""
-Mixed Scenario Generator + Sample CSV Producer
-
-Generates all sample CSVs used for the demo:
-  1. brute_force_sample.csv          — pure brute force, no compromise
-  2. account_compromise_sample.csv   — brute force + compromise + file access
-  3. privilege_escalation_sample.csv — full chain with PRIV_CHANGE + credential dump
-  4. mixed_scenario.csv              — all three scenarios combined (the demo file)
-
-Run this script once to populate datasets/samples/:
-  python datasets/generators/generate_all.py
-"""
-
 from __future__ import annotations
 
 import csv
@@ -21,7 +8,6 @@ from pathlib import Path
 from brute_force_gen import generate_brute_force
 from account_compromise_gen import generate_account_compromise
 from privilege_escalation_gen import generate_privilege_escalation
-
 
 SAMPLES_DIR = Path(__file__).parent.parent / "samples"
 
@@ -45,19 +31,15 @@ def _write_csv(rows: list[dict], path: Path) -> None:
 def main() -> None:
     SAMPLES_DIR.mkdir(parents=True, exist_ok=True)
 
-    # 1. Brute force only
     bf_rows = generate_brute_force(failure_count=15, include_success=False)
     _write_csv(bf_rows, SAMPLES_DIR / "brute_force_sample.csv")
 
-    # 2. Account compromise
     ac_rows = generate_account_compromise(failure_count=8)
     _write_csv(ac_rows, SAMPLES_DIR / "account_compromise_sample.csv")
 
-    # 3. Privilege escalation full chain
     pe_rows = generate_privilege_escalation(failure_count=12)
     _write_csv(pe_rows, SAMPLES_DIR / "privilege_escalation_sample.csv")
 
-    # 4. Mixed scenario: combine all + extra normal traffic
     normal_rows = _generate_normal_traffic(count=20)
     mixed = bf_rows + ac_rows + pe_rows + normal_rows
     mixed.sort(key=lambda r: r.get("timestamp", ""))
@@ -67,7 +49,6 @@ def main() -> None:
 
 
 def _generate_normal_traffic(count: int = 20) -> list[dict]:
-    """Generate benign background events."""
     rows = []
     base = datetime(2025, 8, 19, 9, 0, 0, tzinfo=timezone.utc)
     users = ["jdoe", "alice", "bob", "charlie", "svc_backup"]

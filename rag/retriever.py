@@ -1,7 +1,3 @@
-"""
-RAG Retriever — ChromaDB client + top-K retrieval.
-"""
-
 from __future__ import annotations
 
 import sys
@@ -16,8 +12,6 @@ settings = get_settings()
 
 
 class VectorStore:
-    """ChromaDB wrapper."""
-
     def __init__(self) -> None:
         import chromadb
         self._client = chromadb.HttpClient(
@@ -57,8 +51,6 @@ class VectorStore:
 
 
 class Retriever:
-    """High-level retriever interface."""
-
     def __init__(self, store: Optional[VectorStore] = None) -> None:
         self._store = store or VectorStore()
 

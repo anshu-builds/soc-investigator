@@ -1,10 +1,3 @@
-"""
-Detection Engine — Data Models & Enums
-
-Pure Python dataclasses/enums shared across the detection module.
-No web framework imports. No database imports.
-"""
-
 from __future__ import annotations
 
 import uuid
@@ -60,7 +53,7 @@ class Alert:
     id: uuid.UUID
     rule_name: str
     severity: Severity
-    confidence: float          # 0.0–1.0
+    confidence: float
     description: str
     contributing_event_ids: List[uuid.UUID]
     metadata: Dict[str, Any] = field(default_factory=dict)

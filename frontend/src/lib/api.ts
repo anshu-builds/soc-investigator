@@ -1,9 +1,3 @@
-/**
- * Typed API client — wraps all backend endpoints with proper TypeScript types.
- * The API is unauthenticated for this MVP. A token is included only when one
- * already exists, preserving compatibility with deployments that provide it.
- */
-
 import type {
   ChatResponse,
   DashboardSummary,
@@ -47,13 +41,9 @@ async function request<T>(
   return res.json()
 }
 
-// ─── Dashboard ────────────────────────────────────────────────────────────
-
 export async function getDashboardSummary(): Promise<DashboardSummary> {
   return request<DashboardSummary>('/api/dashboard/summary')
 }
-
-// ─── Incidents ────────────────────────────────────────────────────────────
 
 export interface IncidentFilters {
   page?: number
@@ -80,13 +70,9 @@ export async function updateIncidentStatus(id: string, status: string): Promise<
   })
 }
 
-// ─── Evidence ─────────────────────────────────────────────────────────────
-
 export async function getEvidence(incidentId: string): Promise<EvidenceListResponse> {
   return request<EvidenceListResponse>(`/api/incidents/${incidentId}/evidence`)
 }
-
-// ─── Investigation ────────────────────────────────────────────────────────
 
 export async function createSession(incidentId: string): Promise<SessionCreateResponse> {
   return request<SessionCreateResponse>(`/api/incidents/${incidentId}/sessions`, {
@@ -104,8 +90,6 @@ export async function sendMessage(sessionId: string, message: string): Promise<C
 export async function getMessages(sessionId: string): Promise<MessageListResponse> {
   return request<MessageListResponse>(`/api/sessions/${sessionId}/messages`)
 }
-
-// ─── Logs ─────────────────────────────────────────────────────────────────
 
 export async function uploadLogs(file: File, sourceName?: string): Promise<LogUploadResponse> {
   const token = getToken()
@@ -130,8 +114,6 @@ export async function getLogs(params: Record<string, string> = {}): Promise<Secu
   const qs = new URLSearchParams(params)
   return request<SecurityEventListResponse>(`/api/logs?${qs}`)
 }
-
-// ─── Reports ──────────────────────────────────────────────────────────────
 
 export async function createReport(
   incidentId: string,

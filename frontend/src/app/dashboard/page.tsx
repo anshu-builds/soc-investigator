@@ -167,7 +167,6 @@ export default function DashboardPage() {
 
   return (
     <div className="mx-auto max-w-7xl p-5 sm:p-8">
-      {/* ── Dashboard Header ── */}
       <header className="mb-7 flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-[#111827]">Dashboard</h1>
@@ -189,7 +188,6 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      {/* ── KPI Cards ── */}
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <MetricCard
           label="Total incidents"
@@ -217,9 +215,7 @@ export default function DashboardPage() {
         />
       </section>
 
-      {/* ── Severity Chart + Investigation Queue ── */}
       <section className="mt-6 grid gap-6 lg:grid-cols-[1.25fr_0.75fr]">
-        {/* Severity Chart */}
         <div className="card flex flex-col justify-between p-5">
           <div className="flex items-center justify-between mb-4">
             <div>
@@ -314,7 +310,6 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Investigation Queue */}
         <div className="card flex flex-col justify-between p-5">
           <div>
             <div className="flex items-center justify-between border-b border-[#f0f1f3] pb-3.5">
@@ -370,7 +365,6 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      {/* ── Recent Incidents Table ── */}
       <section className="card mt-6 overflow-hidden">
         <div className="flex items-center justify-between border-b border-[#e6e8eb] px-6 py-4 bg-white">
           <div>
@@ -416,4 +410,3 @@ export default function DashboardPage() {
     </div>
   )
 }
-

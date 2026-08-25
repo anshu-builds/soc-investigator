@@ -10,9 +10,6 @@ import { createReport, getReport } from '@/lib/api'
 import type { ReportOut } from '@/lib/types'
 import React, { Fragment, type ReactNode } from 'react'
 
-/**
- * Replace [EV-NNN] tokens in text with styled evidence chips.
- */
 function renderWithEvidence(children: ReactNode): ReactNode {
   if (typeof children === 'string') {
     const parts = children.split(/(\[EV-\d{3,}\])/g)
@@ -70,10 +67,8 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
     setError(null)
 
     try {
-      // Dynamic import — html2pdf.js is a client-only library
       const html2pdf = (await import('html2pdf.js')).default
 
-      // Make the print footer visible during PDF generation
       const footer = reportRef.current.querySelector('.ir-print-footer') as HTMLElement | null
       if (footer) footer.style.display = 'block'
 
@@ -81,7 +76,7 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
 
       await html2pdf()
         .set({
-          margin: [12, 14, 12, 14],  // mm: top, left, bottom, right
+          margin: [12, 14, 12, 14],
           filename,
           image: { type: 'jpeg', quality: 0.98 },
           html2canvas: {
@@ -109,7 +104,6 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
         .from(reportRef.current)
         .save()
 
-      // Hide the footer again after generation
       if (footer) footer.style.display = ''
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to generate PDF')
@@ -120,8 +114,6 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
 
   return (
     <div className="mx-auto max-w-4xl p-5 sm:p-8">
-
-      {/* ── Actions bar (hidden in print) ── */}
       <div className="flex flex-wrap items-center justify-between gap-4 print:hidden">
         <div>
           <Link
@@ -168,14 +160,12 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
         </div>
       </div>
 
-      {/* ── Error ── */}
       {error && (
         <div className="mt-5 flex gap-3 rounded-xl border border-[#fecaca] bg-[#fef2f2] p-4 text-sm text-[#b42318] print:hidden">
           <AlertTriangle className="h-5 w-5 shrink-0" />{error}
         </div>
       )}
 
-      {/* ── Empty state ── */}
       {!report && !generating && (
         <div className="card mt-6 p-12 text-center print:hidden">
           <FileText className="mx-auto h-9 w-9 text-[#667085]" />
@@ -186,7 +176,6 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
         </div>
       )}
 
-      {/* ── Generating spinner ── */}
       {generating && (
         <div className="card mt-6 p-12 text-center text-sm text-[#667085] print:hidden">
           <Loader2 className="mx-auto mb-3 h-6 w-6 animate-spin text-[#168a52]" />
@@ -194,7 +183,6 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
         </div>
       )}
 
-      {/* ── Report content ── */}
       {report && (
         <article
           ref={reportRef}
@@ -257,7 +245,6 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
               .trim()}
           </ReactMarkdown>
 
-          {/* ── Print footer (visible in print and during PDF generation) ── */}
           <div className="ir-print-footer">
             <p>SOC Investigator · Incident ID: {report.incident_id}</p>
             <p>Confidential — Security Investigation Report</p>

@@ -1,7 +1,3 @@
-"""
-Pydantic v2 Schemas — request/response models for all API endpoints.
-"""
-
 from __future__ import annotations
 
 import uuid
@@ -11,13 +7,9 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 
-# ─── Common ──────────────────────────────────────────────────────────────────
-
 class ORMBase(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-
-# ─── Security Events ─────────────────────────────────────────────────────────
 
 class SecurityEventOut(ORMBase):
     id: uuid.UUID
@@ -40,8 +32,6 @@ class SecurityEventListResponse(BaseModel):
     items: List[SecurityEventOut]
 
 
-# ─── Log Upload ───────────────────────────────────────────────────────────────
-
 class LogUploadResponse(BaseModel):
     job_id: str
     events_parsed: int
@@ -50,8 +40,6 @@ class LogUploadResponse(BaseModel):
     processing_time_ms: int
     source_file: str
 
-
-# ─── Attack Techniques ────────────────────────────────────────────────────────
 
 class AttackTechniqueOut(ORMBase):
     id: uuid.UUID
@@ -66,8 +54,6 @@ class AttackTechniqueOut(ORMBase):
     url: Optional[str]
 
 
-# ─── Evidence ─────────────────────────────────────────────────────────────────
-
 class EvidenceOut(ORMBase):
     id: uuid.UUID
     incident_id: uuid.UUID
@@ -81,8 +67,6 @@ class EvidenceOut(ORMBase):
 class EvidenceListResponse(BaseModel):
     evidence: List[EvidenceOut]
 
-
-# ─── Incidents ────────────────────────────────────────────────────────────────
 
 class IncidentSummary(ORMBase):
     id: uuid.UUID
@@ -129,8 +113,6 @@ class IncidentStatusUpdate(BaseModel):
     status: str = Field(..., pattern="^(OPEN|INVESTIGATING|CLOSED|FALSE_POSITIVE)$")
 
 
-# ─── Investigation Sessions ───────────────────────────────────────────────────
-
 class SessionCreateResponse(BaseModel):
     session_id: uuid.UUID
     incident_id: uuid.UUID
@@ -168,8 +150,6 @@ class MessageListResponse(BaseModel):
     messages: List[ChatMessageOut]
 
 
-# ─── Reports ─────────────────────────────────────────────────────────────────
-
 class ReportRequest(BaseModel):
     format: str = Field("MARKDOWN", pattern="^(MARKDOWN|JSON)$")
     include_ai_summary: bool = True
@@ -190,8 +170,6 @@ class ReportCreateResponse(BaseModel):
     download_url: str
 
 
-# ─── Dashboard ───────────────────────────────────────────────────────────────
-
 class DashboardSummary(BaseModel):
     total_incidents: int
     open_incidents: int
@@ -205,8 +183,6 @@ class DashboardSummary(BaseModel):
     severity_distribution: Dict[str, int]
     recent_incidents: List[IncidentSummary]
 
-
-# ─── Auth ─────────────────────────────────────────────────────────────────────
 
 class LoginRequest(BaseModel):
     email: str

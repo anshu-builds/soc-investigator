@@ -1,11 +1,3 @@
-"""
-AI Context Builder
-
-Pulls incident + evidence + attack_hypothesis from the DB and formats
-a structured context string for the LLM. No raw logs in context —
-only formatted, human-readable summaries of events.
-"""
-
 from __future__ import annotations
 
 import uuid
@@ -22,19 +14,6 @@ async def build_context(
     db: AsyncSession,
     incident_id: uuid.UUID,
 ) -> Dict[str, Any]:
-    """
-    Build a structured context dict for the LLM.
-
-    Returns:
-        {
-            "context_text": str,       # Formatted text for the LLM prompt
-            "evidence_map": dict,      # EV-short-id → evidence UUID (for citation validation)
-            "incident": Incident,
-            "evidence_items": list,
-            "techniques": list,
-        }
-    """
-    # Load incident with related data
     result = await db.execute(
         select(Incident)
         .where(Incident.id == incident_id)
@@ -48,7 +27,7 @@ async def build_context(
     if not incident:
         return {"context_text": "Incident not found.", "evidence_map": {}, "incident": None}
 
-    # Build evidence map: EV-001 → real UUID
+    # Map short citation IDs (EV-001) to database UUIDs
     evidence_items = sorted(
         incident.evidence,
         key=lambda e: (e.sequence_order or 999, str(e.id)),
@@ -74,10 +53,8 @@ def _format_context(
     evidence_items: List[Evidence],
     evidence_map: Dict[str, str],
 ) -> str:
-    """Format incident data as structured text (not raw logs)."""
     lines: List[str] = []
 
-    # Header
     lines.append(f"INCIDENT: {incident.title}")
     lines.append(
         f"SEVERITY: {incident.severity} | "
@@ -96,7 +73,6 @@ def _format_context(
     lines.append(f"TOTAL EVENTS: {incident.event_count}")
     lines.append("")
 
-    # Attack hypothesis
     hypothesis = incident.attack_hypothesis
     if hypothesis:
         lines.append("ATTACK NARRATIVE:")
@@ -115,7 +91,6 @@ def _format_context(
                 )
             lines.append("")
 
-    # MITRE techniques
     if incident.techniques:
         lines.append("MITRE ATT&CK TECHNIQUES:")
         for tech in incident.techniques:
@@ -126,7 +101,6 @@ def _format_context(
             )
         lines.append("")
 
-    # Evidence list
     reverse_map = {v: k for k, v in evidence_map.items()}
     lines.append("EVIDENCE LIST (cite using [EV-NNN]):")
     for ev in evidence_items:

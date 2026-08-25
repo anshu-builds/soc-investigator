@@ -1,9 +1,3 @@
-"""
-Dataset Generator: Account Compromise Scenario
-
-Generates logs for: brute force → successful login → anomalous post-compromise activity.
-"""
-
 from __future__ import annotations
 
 import csv
@@ -23,7 +17,6 @@ def generate_account_compromise(
     rows = []
     t = start_time
 
-    # Background normal traffic
     for _ in range(4):
         rows.append({
             "timestamp": (t - timedelta(minutes=random.randint(5, 20))).isoformat(),
@@ -34,7 +27,6 @@ def generate_account_compromise(
             "message": "Routine login from corporate network",
         })
 
-    # Brute force phase
     for i in range(failure_count):
         rows.append({
             "timestamp": t.isoformat(),
@@ -46,7 +38,6 @@ def generate_account_compromise(
         })
         t += timedelta(seconds=random.uniform(2.0, 8.0))
 
-    # Successful compromise
     t += timedelta(seconds=10)
     rows.append({
         "timestamp": t.isoformat(),
@@ -57,7 +48,6 @@ def generate_account_compromise(
         "message": "User sarah.miller authenticated successfully",
     })
 
-    # Post-compromise anomalous activity (file access from unusual location)
     t += timedelta(minutes=2)
     for path in ["/home/sarah.miller/.ssh/id_rsa", "/etc/passwd", "/var/log/auth.log"]:
         rows.append({

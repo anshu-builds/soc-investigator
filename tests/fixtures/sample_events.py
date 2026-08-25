@@ -1,7 +1,3 @@
-"""
-Test Fixtures: Sample Events
-"""
-
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -17,7 +13,7 @@ def generate_event(
 ) -> NormalizedEvent:
     if base_time is None:
         base_time = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
-        
+
     return NormalizedEvent(
         id=uuid.uuid4(),
         timestamp=base_time + timedelta(minutes=offset_minutes),

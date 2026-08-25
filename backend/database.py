@@ -1,7 +1,3 @@
-"""
-Database — SQLAlchemy 2.0 async engine, session factory, and base model.
-"""
-
 from __future__ import annotations
 
 from typing import AsyncGenerator
@@ -28,12 +24,10 @@ AsyncSessionLocal = async_sessionmaker(
 
 
 class Base(DeclarativeBase):
-    """SQLAlchemy declarative base for all ORM models."""
     pass
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    """FastAPI dependency that yields an async DB session."""
     async with AsyncSessionLocal() as session:
         try:
             yield session
@@ -46,6 +40,5 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def create_all_tables() -> None:
-    """Create all tables (used in lifespan startup)."""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

@@ -1,14 +1,9 @@
-"""
-Unit tests: Privilege Escalation Detection Rule
-"""
-
 import uuid
 from datetime import datetime, timedelta, timezone
 
 from detection import EventType, Severity
 from detection.rules.privilege_escalation import PrivilegeEscalationRule
 from detection import NormalizedEvent
-
 
 BASE = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
 IP = "10.0.0.5"
@@ -52,11 +47,11 @@ class TestPrivilegeEscalationRule:
     def test_auth_success_outside_window(self):
         events = [
             _event(0, EventType.AUTH_SUCCESS),
-            _event(40, EventType.PRIV_CHANGE), # window is 30 mins
+            _event(40, EventType.PRIV_CHANGE),
         ]
         alerts = self._run(events)
         assert len(alerts) == 1
-        assert alerts[0].severity == Severity.HIGH # Not critical since auth is outside window
+        assert alerts[0].severity == Severity.HIGH
 
     def test_multiple_priv_changes_grouped(self):
         events = [

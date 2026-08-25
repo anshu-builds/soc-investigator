@@ -1,10 +1,3 @@
-"""
-Log Normalizer
-
-Converts raw log dictionaries (from CSV/JSON upload) into NormalizedEvent objects.
-Handles field alias resolution and EventType mapping.
-"""
-
 from __future__ import annotations
 
 import re
@@ -14,7 +7,6 @@ from typing import Any, Dict, List, Optional
 
 from detection import EventType, NormalizedEvent
 
-# ─── Field alias maps ─────────────────────────────────────────────────────────
 TIMESTAMP_FIELDS = ["timestamp", "@timestamp", "event_time", "time", "date_time", "datetime"]
 SOURCE_IP_FIELDS = ["src_ip", "source_ip", "sourceIp", "src", "source_address", "client_ip"]
 USERNAME_FIELDS  = ["user", "username", "account", "user_name", "user_id", "login"]
@@ -23,7 +15,6 @@ DEST_IP_FIELDS   = ["dst_ip", "destination_ip", "dest_ip", "dst", "target_ip"]
 DESCRIPTION_FIELDS = ["message", "description", "msg", "detail", "event_message", "log_message"]
 EVENT_TYPE_FIELDS  = ["event_type", "action", "event_id", "type", "event_name", "event"]
 
-# ─── EventType keyword mapping ────────────────────────────────────────────────
 AUTH_FAILURE_KEYWORDS = {
     "FAILED_LOGIN", "4625", "authentication failure", "invalid password",
     "login failed", "auth_failure", "logon failure", "authentication_failure",
@@ -56,7 +47,6 @@ PROCESS_EXEC_KEYWORDS = {
 
 
 def _resolve_field(row: Dict[str, Any], candidates: List[str]) -> Optional[str]:
-    """Return the first non-empty value from a list of candidate field names."""
     for key in candidates:
         val = row.get(key) or row.get(key.lower()) or row.get(key.upper())
         if val is not None and str(val).strip():
@@ -65,16 +55,11 @@ def _resolve_field(row: Dict[str, Any], candidates: List[str]) -> Optional[str]:
 
 
 def _parse_timestamp(raw: Optional[str]) -> datetime:
-    """Parse a timestamp string into a timezone-aware datetime (UTC)."""
     if not raw:
         return datetime.now(tz=timezone.utc)
 
     raw = raw.strip()
 
-    # ISO 8601 timestamps, including:
-    # 2025-08-19T14:15:00+00:00
-    # 2025-08-19T14:15:00.123456+00:00
-    # 2025-08-19T14:15:00Z
     try:
         iso_raw = raw.replace("Z", "+00:00")
         dt = datetime.fromisoformat(iso_raw)
@@ -87,7 +72,6 @@ def _parse_timestamp(raw: Optional[str]) -> datetime:
     except ValueError:
         pass
 
-    # Common non-ISO formats
     formats = [
         "%Y-%m-%d %H:%M:%S",
         "%Y-%m-%d %H:%M:%S.%f",
@@ -102,25 +86,21 @@ def _parse_timestamp(raw: Optional[str]) -> datetime:
         except ValueError:
             continue
 
-    # Epoch timestamp
     try:
         ts = float(raw)
         return datetime.fromtimestamp(ts, tz=timezone.utc)
     except (ValueError, OSError, OverflowError):
         pass
 
-    # Last resort for malformed/missing timestamps
     return datetime.now(tz=timezone.utc)
 
 
 def _map_event_type(raw_type: Optional[str]) -> EventType:
-    """Map raw event type string to EventType enum."""
     if not raw_type:
         return EventType.UNKNOWN
 
     normalized = raw_type.strip().lower()
 
-    # Check exact matches first (case-insensitive)
     for kw in AUTH_FAILURE_KEYWORDS:
         if kw.lower() == normalized or kw.lower() in normalized:
             return EventType.AUTH_FAILURE
@@ -145,10 +125,6 @@ def _map_event_type(raw_type: Optional[str]) -> EventType:
 
 
 def normalize_row(row: Dict[str, Any], source_file: str = "") -> Optional[NormalizedEvent]:
-    """
-    Convert a raw log dictionary into a NormalizedEvent.
-    Returns None if the row is missing critical fields (timestamp or event_type).
-    """
     raw_timestamp = _resolve_field(row, TIMESTAMP_FIELDS)
     raw_event_type = _resolve_field(row, EVENT_TYPE_FIELDS)
     source_ip = _resolve_field(row, SOURCE_IP_FIELDS) or "0.0.0.0"
@@ -160,10 +136,8 @@ def normalize_row(row: Dict[str, Any], source_file: str = "") -> Optional[Normal
     timestamp = _parse_timestamp(raw_timestamp)
     event_type = _map_event_type(raw_event_type)
 
-    # Build raw_log as original row representation
     raw_log = " | ".join(f"{k}={v}" for k, v in row.items() if v is not None)
 
-    # Carry forward all remaining metadata
     known_keys = set(
         TIMESTAMP_FIELDS + SOURCE_IP_FIELDS + USERNAME_FIELDS +
         HOSTNAME_FIELDS + DEST_IP_FIELDS + DESCRIPTION_FIELDS + EVENT_TYPE_FIELDS
@@ -187,7 +161,6 @@ def normalize_row(row: Dict[str, Any], source_file: str = "") -> Optional[Normal
 
 
 def normalize_batch(rows: List[Dict[str, Any]], source_file: str = "") -> List[NormalizedEvent]:
-    """Normalize a batch of raw log rows, skipping None results."""
     events = []
     for row in rows:
         event = normalize_row(row, source_file)

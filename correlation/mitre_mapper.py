@@ -1,10 +1,3 @@
-"""
-MITRE ATT&CK Mapper
-
-Maps attack hypothesis phases to MITRE ATT&CK technique identifiers.
-Rule-based mapping — no LLM required.
-"""
-
 from __future__ import annotations
 
 from typing import Any, Dict, List
@@ -18,7 +11,6 @@ from correlation.hypothesis import (
 
 MITRE_BASE_URL = "https://attack.mitre.org/techniques/"
 
-# Technique registry for the 3 MVP scenarios
 TECHNIQUE_REGISTRY: Dict[str, Dict[str, Any]] = {
     "T1110": {
         "technique_id": "T1110",
@@ -62,7 +54,6 @@ TECHNIQUE_REGISTRY: Dict[str, Dict[str, Any]] = {
     },
 }
 
-# Attack type → list of technique IDs to assign
 ATTACK_TYPE_TO_TECHNIQUES: Dict[str, List[str]] = {
     ATTACK_TYPE_BRUTE_FORCE: ["T1110", "T1110.001"],
     ATTACK_TYPE_ACCOUNT_COMPROMISE: ["T1110", "T1110.001", "T1078"],
@@ -70,7 +61,6 @@ ATTACK_TYPE_TO_TECHNIQUES: Dict[str, List[str]] = {
     ATTACK_TYPE_PRIVILEGE_ESCALATION_ONLY: ["T1078", "T1078.003"],
 }
 
-# Confidence per technique — brute force is high confidence, escalation slightly lower
 TECHNIQUE_CONFIDENCE: Dict[str, float] = {
     "T1110": 0.95,
     "T1110.001": 0.90,
@@ -81,11 +71,6 @@ TECHNIQUE_CONFIDENCE: Dict[str, float] = {
 
 
 def map_techniques(attack_classification: str) -> List[Dict[str, Any]]:
-    """
-    Map an attack classification to a list of MITRE ATT&CK technique dicts.
-
-    Returns a list ready for insertion into the attack_techniques table.
-    """
     technique_ids = ATTACK_TYPE_TO_TECHNIQUES.get(attack_classification, ["T1110"])
     result = []
     for tid in technique_ids:

@@ -1,7 +1,3 @@
-"""
-Ingest MITRE ATT&CK Enterprise Matrix (stix json) into ChromaDB.
-"""
-
 from __future__ import annotations
 
 import json
@@ -29,7 +25,6 @@ def ingest_mitre() -> None:
 
     for obj in data.get("objects", []):
         if obj.get("type") == "attack-pattern":
-            # Extract technique ID
             ext_refs = obj.get("external_references", [])
             tech_id = next(
                 (r.get("external_id") for r in ext_refs if r.get("source_name") == "mitre-attack"),
@@ -46,8 +41,6 @@ def ingest_mitre() -> None:
             )
 
             if description:
-                # Truncate description for embedding if extremely long
-                # but typically MITRE descriptions are fine for our chunk size
                 documents.append(f"{tech_id}: {name}\n{description}"[:1000])
                 metadatas.append({
                     "source": "mitre-attack",

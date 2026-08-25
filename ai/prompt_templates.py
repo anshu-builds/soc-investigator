@@ -1,7 +1,3 @@
-"""
-Prompt Templates — all system/user prompts for the SOC AI investigation layer.
-"""
-
 from __future__ import annotations
 
 SYSTEM_PROMPT = """You are an expert Security Operations Center (SOC) analyst assistant.
@@ -90,7 +86,6 @@ def build_user_prompt(user_question: str) -> str:
     return USER_PROMPT_TEMPLATE.format(user_question=user_question)
 
 
-# Suggested starter questions for the UI
 SUGGESTED_QUESTIONS = [
     "What triggered this alert and when did it start?",
     "What happened after the successful login?",

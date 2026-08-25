@@ -1,22 +1,3 @@
-"""
-Rule 1: Brute Force Detection
-
-Logic:
-  - Sliding 5-minute window
-  - Threshold: ≥ 5 AUTH_FAILURE events
-  - Grouping key: (source_ip, username)
-
-Confidence:
-  - Base 0.6 + 0.04 per failure beyond threshold (capped 0.95)
-  - Same IP throughout: +0.10
-  - All failures within 60s: +0.05
-
-Severity:
-  - 5-9 failures  → MEDIUM
-  - 10-19 failures → HIGH
-  - ≥20 or automated (< 1s avg interval) → CRITICAL
-"""
-
 from __future__ import annotations
 
 import uuid
@@ -42,9 +23,8 @@ class BruteForceRule(BaseRule):
         indexed: Dict[Tuple, List[NormalizedEvent]],
     ) -> List[Alert]:
         alerts: List[Alert] = []
-        seen_windows: set = set()  # Deduplication: (source_ip, username, window_start_minute)
+        seen_windows: set = set()
 
-        # Group AUTH_FAILURE events by (source_ip, username)
         failure_groups: Dict[Tuple[str, Optional[str]], List[NormalizedEvent]] = defaultdict(list)
         for event in events:
             if event.event_type == EventType.AUTH_FAILURE:
@@ -57,7 +37,6 @@ class BruteForceRule(BaseRule):
             if len(failures) < self.THRESHOLD:
                 continue
 
-            # Slide window over sorted failures
             failures_sorted = sorted(failures, key=lambda e: e.timestamp)
 
             i = 0
@@ -65,7 +44,6 @@ class BruteForceRule(BaseRule):
                 anchor = failures_sorted[i]
                 window_end = anchor.timestamp + window
 
-                # Collect all failures within this window
                 window_events = [
                     e for e in failures_sorted[i:]
                     if e.timestamp <= window_end
@@ -75,7 +53,6 @@ class BruteForceRule(BaseRule):
                     i += 1
                     continue
 
-                # Dedup: use (source_ip, username, window_minute) as key
                 dedup_key = (
                     source_ip,
                     username or "",
@@ -118,7 +95,6 @@ class BruteForceRule(BaseRule):
                     attack_phase=AttackPhase.INITIAL_ACCESS,
                 ))
 
-                # Advance past this window to avoid overlapping sub-windows
                 i += max(1, len(window_events))
 
         return alerts
@@ -128,7 +104,6 @@ class BruteForceRule(BaseRule):
         if count >= 20:
             return Severity.CRITICAL
 
-        # Check if automated: average < 1s between attempts
         if len(window_events) >= 5:
             intervals = [
                 (window_events[j].timestamp - window_events[j-1].timestamp).total_seconds()
@@ -149,16 +124,13 @@ class BruteForceRule(BaseRule):
     ) -> float:
         count = len(window_events)
         confidence = 0.60
-        # +0.04 per failure beyond threshold, capped at 0.95
         extra = min((count - self.THRESHOLD) * 0.04, 0.35)
         confidence += extra
 
-        # All from same IP
         all_same_ip = all(e.source_ip == source_ip for e in window_events)
         if all_same_ip:
             confidence += 0.10
 
-        # Fast attack (all within 60s)
         duration = (window_events[-1].timestamp - window_events[0].timestamp).total_seconds()
         if duration <= 60:
             confidence += 0.05

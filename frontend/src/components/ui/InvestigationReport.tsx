@@ -9,10 +9,6 @@ interface InvestigationReportProps {
   confidence?: number
 }
 
-/**
- * Replace [EV-NNN] tokens in a text string with styled evidence chips.
- * Returns a ReactNode array with chip spans interspersed with plain text.
- */
 function renderWithEvidence(children: ReactNode): ReactNode {
   if (typeof children === 'string') {
     const parts = children.split(/(\[EV-\d{3,}\])/g)
@@ -37,7 +33,6 @@ function renderWithEvidence(children: ReactNode): ReactNode {
   return children
 }
 
-/** Normalize heading text to a canonical section label */
 function getSectionLabel(children: ReactNode): string | null {
   let text = ''
   if (typeof children === 'string') {
@@ -62,13 +57,6 @@ function getSectionLabel(children: ReactNode): string | null {
   return LABELS[lower] ?? null
 }
 
-/**
- * InvestigationReport renders an AI investigation response as a structured,
- * readable SOC report using react-markdown with custom component renderers.
- *
- * Markdown is parsed correctly: headings, bold, lists, code, paragraphs.
- * Evidence references [EV-NNN] are rendered as styled chips.
- */
 export function InvestigationReport({
   content,
   answerType,
@@ -106,7 +94,6 @@ export function InvestigationReport({
           ),
           em: ({ children }) => <em>{renderWithEvidence(children)}</em>,
           code: ({ children, className }) => {
-            // Fenced code block (has language className)
             if (className) {
               return (
                 <pre className="ir-code-block">
@@ -114,7 +101,6 @@ export function InvestigationReport({
                 </pre>
               )
             }
-            // Inline code
             return <code className="ir-inline-code">{children}</code>
           },
           hr: () => <hr className="ir-divider" />,

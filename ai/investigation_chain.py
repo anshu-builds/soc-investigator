@@ -1,10 +1,3 @@
-"""
-Investigation Chain — Full AI Pipeline Orchestrator
-
-Flow:
-  context_builder → RAG retrieval → prompt_constructor → LLM → evidence_linker → response
-"""
-
 from __future__ import annotations
 
 import uuid
@@ -27,17 +20,11 @@ async def run_investigation_chain(
     db: AsyncSession,
     incident_id: uuid.UUID,
     user_question: str,
-    rag_retriever=None,  # Optional: rag.retriever.Retriever instance
+    rag_retriever=None,
 ) -> Dict[str, Any]:
-    """
-    Full AI investigation pipeline.
-
-    Returns a structured response dict ready for the API.
-    """
-    # Step 1: Build incident context from DB
     context = await build_context(db, incident_id)
     incident_context = context["context_text"]
-    evidence_map = context["evidence_map"]  # "EV-001" → UUID string
+    evidence_map = context["evidence_map"]
 
     if not context["incident"]:
         return {
@@ -49,7 +36,6 @@ async def run_investigation_chain(
             "confidence": 0.0,
         }
 
-    # Step 2: RAG retrieval
     rag_chunks: List[Dict] = []
     rag_context = ""
     if rag_retriever is not None:
@@ -65,14 +51,11 @@ async def run_investigation_chain(
         except Exception as e:
             print(f"[RAG] Retrieval failed: {e}")
 
-    # Step 3: Construct prompts
     system_prompt = build_system_prompt(incident_context, rag_context)
     user_prompt = build_user_prompt(user_question)
 
-    # Step 4: LLM call
     raw_response = await call_llm(system_prompt, user_prompt)
 
-    # Step 5: Evidence validation
     valid_uuids, invalid_keys, cleaned_response = extract_and_validate_citations(
         raw_response, evidence_map
     )
@@ -84,7 +67,7 @@ async def run_investigation_chain(
     rag_sources = extract_rag_sources(rag_chunks)
     answer_type = classify_answer_type(cleaned_response)
 
-    # Confidence: based on citation density and evidence map coverage
+    # Score confidence by citation density against available evidence
     cited_ratio = len(valid_uuids) / max(len(evidence_map), 1)
     confidence = min(0.5 + cited_ratio * 0.5, 0.98) if valid_uuids else 0.55
 

@@ -1,9 +1,3 @@
-"""
-Dataset Generator: Privilege Escalation Scenario
-
-Generates the full chain: brute force → compromise → PRIV_CHANGE → FILE_ACCESS on sensitive paths.
-"""
-
 from __future__ import annotations
 
 import csv
@@ -23,7 +17,6 @@ def generate_privilege_escalation(
     rows = []
     t = start_time
 
-    # Brute force
     for i in range(failure_count):
         rows.append({
             "timestamp": t.isoformat(),
@@ -35,7 +28,6 @@ def generate_privilege_escalation(
         })
         t += timedelta(seconds=random.uniform(0.5, 2.0))
 
-    # Compromise
     t += timedelta(seconds=5)
     rows.append({
         "timestamp": t.isoformat(),
@@ -46,7 +38,6 @@ def generate_privilege_escalation(
         "message": "Admin account authentication successful",
     })
 
-    # Privilege escalation
     t += timedelta(minutes=1)
     rows.append({
         "timestamp": t.isoformat(),
@@ -57,7 +48,6 @@ def generate_privilege_escalation(
         "message": "Special privileges assigned to new logon — admin granted SeDebugPrivilege",
     })
 
-    # Sensitive file access after escalation
     t += timedelta(minutes=2)
     sensitive_files = [
         "C:\\Windows\\System32\\config\\SAM",
@@ -78,7 +68,6 @@ def generate_privilege_escalation(
         })
         t += timedelta(seconds=random.uniform(15, 60))
 
-    # Process execution (credential dumping attempt)
     t += timedelta(minutes=1)
     rows.append({
         "timestamp": t.isoformat(),

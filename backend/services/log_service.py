@@ -1,9 +1,3 @@
-"""
-Log Service — Full Pipeline
-
-Orchestrates: file parsing → normalize → detect → correlate → persist
-"""
-
 from __future__ import annotations
 
 import csv
@@ -19,7 +13,6 @@ from typing import Any, Dict, List, Tuple
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-# Ensure project root is importable
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from backend.models import Evidence, Incident, AttackTechnique, SecurityEvent
@@ -43,7 +36,6 @@ EVENT_CATEGORY_MAP = {
 
 
 def parse_upload(content: bytes, filename: str) -> List[Dict[str, Any]]:
-    """Parse CSV or JSON upload into a list of raw row dicts."""
     text = content.decode("utf-8-sig", errors="replace")  # Handle BOM
     fn_lower = filename.lower()
 
@@ -55,7 +47,6 @@ def parse_upload(content: bytes, filename: str) -> List[Dict[str, Any]]:
             return data["events"]
         return [data]
     else:
-        # Treat as CSV
         reader = csv.DictReader(io.StringIO(text))
         return [row for row in reader]
 
@@ -65,28 +56,19 @@ async def run_pipeline(
     raw_rows: List[Dict[str, Any]],
     source_file: str,
 ) -> Tuple[int, int, int]:
-    """
-    Run the full detection pipeline.
-
-    Returns: (events_parsed, events_flagged, incidents_created)
-    """
-    # 1. Normalize
     normalized: List[NormalizedEvent] = normalize_batch(raw_rows, source_file)
     if not normalized:
         return 0, 0, 0
 
-    # 2. Persist security events
     db_events = await _persist_events(db, normalized)
     await db.flush()
 
-    # 3. Detect
     engine = DetectionEngine()
     alerts = engine.run(normalized)
 
     if not alerts:
         return len(normalized), 0, 0
 
-    # Mark flagged events
     flagged_ids = set()
     for alert in alerts:
         for eid in alert.contributing_event_ids:
@@ -97,26 +79,20 @@ async def run_pipeline(
         if event.id in flagged_ids:
             event.is_flagged = True
 
-    # 4. Correlate
     groups: List[IncidentGroup] = correlate(alerts, normalized)
 
-    # 5. Create incidents + evidence + techniques
     incidents_created = 0
     event_id_map: Dict[uuid.UUID, SecurityEvent] = {e.id: e for e in db_events}
 
     for group in groups:
-        # Build timeline using only events in this group
         group_event_ids = set(group.all_event_ids)
         timeline: List[TimelineEntry] = build_timeline(normalized, group_event_ids)
 
-        # Build hypothesis
         hypothesis = build_hypothesis(group, timeline)
         attack_type = hypothesis["classification"]
 
-        # Determine title
         title = _make_incident_title(attack_type, group)
 
-        # Create incident
         incident = Incident(
             id=uuid.uuid4(),
             title=title,
@@ -134,15 +110,13 @@ async def run_pipeline(
             attack_hypothesis=hypothesis,
         )
         db.add(incident)
-        await db.flush()  # Get incident.id
+        await db.flush()
 
-        # Create evidence items from timeline
         for entry in timeline:
             db_event = event_id_map.get(entry.event_id)
             if db_event is None:
                 continue
 
-            # Update event's incident_id
             db_event.incident_id = incident.id
 
             role = _determine_evidence_role(entry)
@@ -155,7 +129,6 @@ async def run_pipeline(
             )
             db.add(evidence)
 
-        # Create attack technique mappings
         techniques = map_techniques(attack_type)
         for tech in techniques:
             at = AttackTechnique(
@@ -181,7 +154,6 @@ async def _persist_events(
     db: AsyncSession,
     normalized: List[NormalizedEvent],
 ) -> List[SecurityEvent]:
-    """Bulk-insert all normalized events into the DB and return ORM objects."""
     db_events = []
     for event in normalized:
         category = EVENT_CATEGORY_MAP.get(event.event_type.value, "unknown")

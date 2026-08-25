@@ -1,14 +1,9 @@
-"""
-Unit tests: Account Compromise Detection Rule
-"""
-
 import uuid
 from datetime import datetime, timedelta, timezone
 
 from detection import EventType, Severity
 from detection.rules.account_compromise import AccountCompromiseRule
 from detection import NormalizedEvent
-
 
 BASE = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
 IP = "10.0.0.5"
@@ -64,7 +59,6 @@ class TestAccountCompromiseRule:
         assert c_many > c_few
 
     def test_success_outside_grace_period_no_alert(self):
-        # 3 failures, then success 40 minutes later (window=30min + grace=5min)
         events = [_failure(i * 10) for i in range(3)] + [_success(60 * 40)]
         assert self._run(events) == []
 

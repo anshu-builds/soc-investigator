@@ -1,10 +1,3 @@
-"""
-Dataset Generator: Brute Force Scenario
-
-Generates realistic CSV logs for a brute force attack.
-Output: N AUTH_FAILUREs from one attacking IP, optional AUTH_SUCCESS.
-"""
-
 from __future__ import annotations
 
 import csv
@@ -44,14 +37,12 @@ def generate_brute_force(
     start_time: datetime | None = None,
     output_path: str | Path | None = None,
 ) -> list[dict]:
-    """Generate brute force log rows."""
     if start_time is None:
         start_time = datetime(2025, 8, 19, 10, 31, 0, tzinfo=timezone.utc)
 
     rows = []
     current_time = start_time
 
-    # 5 normal background events first
     for i in range(5):
         rows.append({
             "timestamp": (current_time - timedelta(minutes=random.randint(5, 30))).isoformat(),
@@ -62,7 +53,6 @@ def generate_brute_force(
             "message": random.choice(NORMAL_MESSAGES),
         })
 
-    # Brute force failures (fast, sub-second intervals to simulate automation)
     for i in range(failure_count):
         rows.append({
             "timestamp": current_time.isoformat(),
@@ -74,7 +64,6 @@ def generate_brute_force(
         })
         current_time += timedelta(seconds=random.uniform(0.5, 3.0))
 
-    # Optional successful login (compromise event)
     if include_success:
         current_time += timedelta(seconds=5)
         rows.append({
@@ -86,7 +75,6 @@ def generate_brute_force(
             "message": random.choice(SUCCESS_MESSAGES),
         })
 
-    # Sort by timestamp
     rows.sort(key=lambda r: r["timestamp"])
 
     if output_path:

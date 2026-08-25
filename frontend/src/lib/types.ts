@@ -1,7 +1,3 @@
-/**
- * Shared TypeScript types — mirrors backend Pydantic schemas.
- */
-
 export interface TokenResponse {
   access_token: string
   token_type: string

@@ -1,7 +1,3 @@
-"""
-FastAPI Main Application — All routers, lifespan, CORS, and DB seeding.
-"""
-
 from __future__ import annotations
 
 import sys
@@ -40,16 +36,11 @@ from ai.investigation_chain import run_investigation_chain
 settings = get_settings()
 
 
-# ─── Lifespan ─────────────────────────────────────────────────────────────────
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Create DB tables
     await create_all_tables()
     yield
 
-
-# ─── App factory ──────────────────────────────────────────────────────────────
 
 app = FastAPI(
     title="SOC Investigator API",
@@ -67,14 +58,10 @@ app.add_middleware(
 )
 
 
-# ─── Health ───────────────────────────────────────────────────────────────────
-
 @app.get("/health")
 async def health():
     return {"status": "ok"}
 
-
-# ─── Logs ────────────────────────────────────────────────────────────────────
 
 @app.post("/api/logs/upload", response_model=LogUploadResponse, tags=["logs"])
 async def upload_logs(
@@ -137,8 +124,6 @@ async def list_logs(
     return SecurityEventListResponse(total=total, items=events)
 
 
-# ─── Incidents ────────────────────────────────────────────────────────────────
-
 @app.get("/api/incidents", response_model=IncidentListResponse, tags=["incidents"])
 async def list_incidents(
     page: int = Query(1, ge=1),
@@ -200,8 +185,6 @@ async def update_incident_status(
     return incident
 
 
-# ─── Evidence ─────────────────────────────────────────────────────────────────
-
 @app.get("/api/incidents/{incident_id}/evidence", response_model=EvidenceListResponse, tags=["evidence"])
 async def get_evidence(
     incident_id: uuid.UUID,
@@ -216,8 +199,6 @@ async def get_evidence(
     evidence = result.scalars().all()
     return EvidenceListResponse(evidence=evidence)
 
-
-# ─── Investigation (AI Chat) ─────────────────────────────────────────────────
 
 @app.post("/api/incidents/{incident_id}/sessions", response_model=SessionCreateResponse, tags=["investigation"])
 async def create_session(
@@ -245,7 +226,6 @@ async def chat(
     body: ChatRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    # Load session
     result = await db.execute(
         select(InvestigationSession).where(InvestigationSession.id == session_id)
     )
@@ -253,12 +233,10 @@ async def chat(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    # Persist user message
     user_msg = ChatMessage(session_id=session_id, role="user", content=body.message)
     db.add(user_msg)
     await db.flush()
 
-    # Run AI chain
     try:
         from rag.retriever import get_retriever
         retriever = get_retriever()
@@ -272,7 +250,6 @@ async def chat(
         rag_retriever=retriever,
     )
 
-    # Persist assistant message
     assistant_msg = ChatMessage(
         session_id=session_id,
         role="assistant",
@@ -311,8 +288,6 @@ async def get_messages(
     return MessageListResponse(session_id=session_id, messages=messages)
 
 
-# ─── Reports ─────────────────────────────────────────────────────────────────
-
 @app.post("/api/incidents/{incident_id}/report", response_model=ReportCreateResponse, tags=["reports"])
 async def create_report(
     incident_id: uuid.UUID,
@@ -323,7 +298,7 @@ async def create_report(
         db=db,
         incident_id=incident_id,
         format=body.format,
-        ai_summary=None,  # Could call LLM for summary — deferred for MVP
+        ai_summary=None,
     )
     await db.commit()
     return ReportCreateResponse(
@@ -362,13 +337,10 @@ async def download_report(
     )
 
 
-# ─── Dashboard ───────────────────────────────────────────────────────────────
-
 @app.get("/api/dashboard/summary", response_model=DashboardSummary, tags=["dashboard"])
 async def dashboard_summary(
     db: AsyncSession = Depends(get_db),
 ):
-    # Counts
     total_result = await db.execute(select(func.count(Incident.id)))
     total_incidents = total_result.scalar() or 0
 
@@ -383,14 +355,12 @@ async def dashboard_summary(
     events_total = await db.execute(select(func.count(SecurityEvent.id)))
     events_flagged = await db.execute(select(func.count(SecurityEvent.id)).where(SecurityEvent.is_flagged.is_(True)))
 
-    # Incidents by type
     type_result = await db.execute(
         select(Incident.attack_type, func.count(Incident.id))
         .group_by(Incident.attack_type)
     )
     incidents_by_type = {row[0]: row[1] for row in type_result}
 
-    # Recent incidents
     recent_result = await db.execute(
         select(Incident).order_by(Incident.created_at.desc()).limit(5)
     )

@@ -1,10 +1,3 @@
-"""
-RAG Playbook Ingestion Script
-
-Embeds the 3 investigation playbooks into ChromaDB.
-Run once after ChromaDB is started.
-"""
-
 from __future__ import annotations
 
 import sys
@@ -25,7 +18,6 @@ def ingest_playbooks() -> None:
 
     for md_file in PLAYBOOK_DIR.glob("*.md"):
         text = md_file.read_text(encoding="utf-8")
-        # Split into ~500-character chunks
         chunks = _chunk_text(text, chunk_size=500, overlap=100)
         for i, chunk in enumerate(chunks):
             doc_id = f"playbook_{md_file.stem}_{i}"
@@ -45,7 +37,6 @@ def ingest_playbooks() -> None:
 
 
 def _chunk_text(text: str, chunk_size: int = 500, overlap: int = 100) -> list[str]:
-    """Split text into overlapping chunks."""
     chunks = []
     start = 0
     while start < len(text):

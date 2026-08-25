@@ -1,10 +1,3 @@
-"""
-Attack Hypothesis Builder
-
-Generates deterministic, template-based attack hypothesis JSON from an IncidentGroup + timeline.
-No LLM required — all narratives are evidence-backed by the actual event sequence.
-"""
-
 from __future__ import annotations
 
 from datetime import datetime
@@ -14,7 +7,6 @@ from correlation.correlator import IncidentGroup
 from correlation.timeline_builder import TimelineEntry
 from detection import AttackPhase, EventType
 
-# Classification constants
 ATTACK_TYPE_BRUTE_FORCE = "BRUTE_FORCE"
 ATTACK_TYPE_ACCOUNT_COMPROMISE = "ACCOUNT_COMPROMISE"
 ATTACK_TYPE_ACCOUNT_COMPROMISE_WITH_ESCALATION = "ACCOUNT_COMPROMISE_WITH_ESCALATION"
@@ -49,11 +41,6 @@ def build_hypothesis(
     group: IncidentGroup,
     timeline: List[TimelineEntry],
 ) -> Dict[str, Any]:
-    """
-    Build the attack_hypothesis JSONB structure for an incident.
-
-    Returns a dict ready for JSON serialization.
-    """
     phases_data = _extract_phases(timeline)
     classification = _classify_attack(phases_data)
     narrative = _generate_narrative(classification, group, timeline, phases_data)
@@ -67,7 +54,6 @@ def build_hypothesis(
 
 
 def _extract_phases(timeline: List[TimelineEntry]) -> List[Dict[str, Any]]:
-    """Aggregate timeline entries into phase summaries."""
     phase_order = [
         AttackPhase.INITIAL_ACCESS,
         AttackPhase.COMPROMISE,
@@ -81,7 +67,6 @@ def _extract_phases(timeline: List[TimelineEntry]) -> List[Dict[str, Any]]:
             phase_map[entry.phase] = []
         phase_map[entry.phase].append(entry)
 
-    # MITRE technique per phase
     phase_technique_map = {
         AttackPhase.INITIAL_ACCESS: ("T1110", "Brute Force"),
         AttackPhase.COMPROMISE:     ("T1078", "Valid Accounts"),
@@ -111,7 +96,6 @@ def _extract_phases(timeline: List[TimelineEntry]) -> List[Dict[str, Any]]:
 
 
 def _classify_attack(phases_data: List[Dict[str, Any]]) -> str:
-    """Determine the attack classification from which phases exist."""
     phase_names = {p["phase"] for p in phases_data}
 
     has_initial_access = AttackPhase.INITIAL_ACCESS.value in phase_names
@@ -134,29 +118,24 @@ def _generate_narrative(
     timeline: List[TimelineEntry],
     phases_data: List[Dict[str, Any]],
 ) -> str:
-    """Fill in a narrative template with real event data."""
     template = NARRATIVE_TEMPLATES.get(classification, "Security incident detected.")
 
-    # Count failures
     failure_count = sum(
         1 for e in timeline if e.event_type == EventType.AUTH_FAILURE
     )
 
-    # Get compromise time
     compromise_entries = [e for e in timeline if e.event_type == EventType.AUTH_SUCCESS]
     compromise_time = (
         compromise_entries[0].timestamp.strftime("%H:%M:%S UTC")
         if compromise_entries else "unknown"
     )
 
-    # Get escalation time
     escalation_entries = [e for e in timeline if e.event_type == EventType.PRIV_CHANGE]
     escalation_time = (
         escalation_entries[0].timestamp.strftime("%H:%M:%S UTC")
         if escalation_entries else "unknown"
     )
 
-    # Duration in minutes
     duration_minutes = 0
     if group.first_seen and group.last_seen:
         duration_minutes = max(

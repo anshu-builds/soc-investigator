@@ -1,10 +1,3 @@
-"""
-Report Service — assembles and renders incident reports.
-
-Data preparation (grouping, consolidation) happens here in Python.
-Jinja is responsible only for presentation/template rendering.
-"""
-
 from __future__ import annotations
 
 import uuid
@@ -20,7 +13,6 @@ from sqlalchemy.orm import selectinload
 
 from backend.models import Evidence, Incident, Report
 
-
 TEMPLATE_DIR = Path(__file__).parent.parent.parent / "reports" / "templates"
 
 _jinja_env = Environment(
@@ -35,7 +27,6 @@ async def generate_report(
     format: str = "MARKDOWN",
     ai_summary: Optional[str] = None,
 ) -> Report:
-    """Generate and persist a report for an incident."""
     result = await db.execute(
         select(Incident)
         .where(Incident.id == incident_id)
@@ -51,7 +42,6 @@ async def generate_report(
     hypothesis = incident.attack_hypothesis or {}
     narrative = hypothesis.get("narrative", incident.description or "")
 
-    # ── Data preparation in Python (not Jinja) ──────────────────────
     timeline_entries = _build_template_timeline(hypothesis)
     recommended = _build_recommended_actions(incident.attack_type)
     consolidated_techniques = _consolidate_techniques(list(incident.techniques))
@@ -86,11 +76,7 @@ async def generate_report(
     return report
 
 
-# ── Data preparation helpers ────────────────────────────────────────────────
-
-
 def _build_template_timeline(hypothesis: Dict[str, Any]) -> List[Any]:
-    """Convert hypothesis phases into simple objects for the Jinja template."""
     entries = []
     for i, phase in enumerate(hypothesis.get("phases", []), 1):
         ts_raw = phase.get("timestamp_start", "")
@@ -109,16 +95,9 @@ def _build_template_timeline(hypothesis: Dict[str, Any]) -> List[Any]:
 
 
 def _consolidate_techniques(techniques: list) -> List[Any]:
-    """Consolidate duplicate MITRE ATT&CK techniques.
-
-    If both T1110 and T1110.001 exist, keep the more specific sub-technique
-    and drop the parent if they share the same tactic.
-    Never invent or alter technique data — only deduplicate.
-    """
     if not techniques:
         return []
 
-    # Group by base technique ID (e.g., T1110)
     by_base: Dict[str, list] = {}
     for t in techniques:
         base = t.technique_id
@@ -128,19 +107,16 @@ def _consolidate_techniques(techniques: list) -> List[Any]:
     seen_keys: set = set()
 
     for base_id, group in by_base.items():
-        # Separate parent techniques from sub-techniques
         parents = [t for t in group if not t.sub_technique_id]
         subs = [t for t in group if t.sub_technique_id]
 
         if subs:
-            # Keep only the sub-techniques (more specific)
             for sub in subs:
                 key = f"{sub.technique_id}|{sub.sub_technique_id}"
                 if key not in seen_keys:
                     seen_keys.add(key)
                     consolidated.append(sub)
         else:
-            # No sub-techniques, keep the parent
             for parent in parents:
                 key = parent.technique_id
                 if key not in seen_keys:
@@ -151,16 +127,6 @@ def _consolidate_techniques(techniques: list) -> List[Any]:
 
 
 def _group_evidence(evidence_sorted: list) -> List[Any]:
-    """Group consecutive evidence items with the same event_type.
-
-    Returns a list of SimpleNamespace objects. Each has:
-      - is_group (bool): True if this represents multiple events
-      - items: list of original Evidence objects in the group
-      - count: number of items
-      - label: e.g. "EV-001"
-      - label_range: e.g. "EV-002 → EV-008" (for groups)
-      - event_type, source_ip, username, first_time, last_time, description
-    """
     if not evidence_sorted:
         return []
 
@@ -169,7 +135,6 @@ def _group_evidence(evidence_sorted: list) -> List[Any]:
 
     for ev in evidence_sorted[1:]:
         prev = current_group[-1]
-        # Group if same event_type and same source_ip/user
         if (ev.event and prev.event
                 and ev.event.event_type == prev.event.event_type
                 and ev.event.source_ip == prev.event.source_ip
@@ -184,12 +149,9 @@ def _group_evidence(evidence_sorted: list) -> List[Any]:
 
 
 def _finalize_group(items: list, offset: int) -> Any:
-    """Create a SimpleNamespace for a group of evidence items."""
     first = items[0]
     last = items[-1]
 
-    first_idx = offset + 1  # we'll compute the real index based on overall position
-    # Compute real 1-based indices from sequence_order
     indices = []
     for i, item in enumerate(items):
         idx = item.sequence_order if item.sequence_order else (offset + i + 1)

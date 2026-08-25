@@ -1,10 +1,7 @@
-"""
-Unit tests: Brute Force Detection Rule
-"""
-
 import uuid
 from datetime import datetime, timedelta, timezone
 
+# pyrefly: ignore [missing-import]
 import pytest
 
 from detection import EventType, Severity
@@ -37,8 +34,6 @@ class TestBruteForceRule:
     def _run(self, events):
         return self.rule.evaluate(sorted(events, key=lambda e: e.timestamp), {})
 
-    # ─── Threshold tests ──────────────────────────────────────────────────────
-
     def test_below_threshold_no_alert(self):
         events = [_make_failure(offset_seconds=i * 30) for i in range(4)]
         alerts = self._run(events)
@@ -53,8 +48,6 @@ class TestBruteForceRule:
         events = [_make_failure(offset_seconds=i * 10) for i in range(10)]
         alerts = self._run(events)
         assert len(alerts) == 1
-
-    # ─── Severity tests ──────────────────────────────────────────────────────
 
     def test_medium_severity_5_to_9(self):
         events = [_make_failure(offset_seconds=i * 30) for i in range(6)]
@@ -72,12 +65,9 @@ class TestBruteForceRule:
         assert alerts[0].severity == Severity.CRITICAL
 
     def test_critical_automated_fast_attack(self):
-        # Sub-second intervals → automated attack → CRITICAL
         events = [_make_failure(offset_seconds=i * 0.5) for i in range(8)]
         alerts = self._run(events)
         assert alerts[0].severity == Severity.CRITICAL
-
-    # ─── Confidence tests ─────────────────────────────────────────────────────
 
     def test_confidence_increases_with_more_failures(self):
         events_5 = [_make_failure(offset_seconds=i * 30) for i in range(5)]
@@ -96,8 +86,6 @@ class TestBruteForceRule:
         alerts = self._run(events)
         assert alerts[0].confidence >= 0.60
 
-    # ─── Isolation: different users not grouped ───────────────────────────────
-
     def test_different_users_separate_alerts(self):
         events = (
             [_make_failure(username="alice", offset_seconds=i * 10) for i in range(6)]
@@ -114,15 +102,10 @@ class TestBruteForceRule:
         alerts = self._run(events)
         assert len(alerts) == 2
 
-    # ─── Out-of-window events ─────────────────────────────────────────────────
-
     def test_outside_time_window_no_alert(self):
-        # 5 failures but spread across 10 minutes (window = 5 minutes)
         events = [_make_failure(offset_seconds=i * 150) for i in range(5)]
         alerts = self._run(events)
         assert len(alerts) == 0
-
-    # ─── Metadata ────────────────────────────────────────────────────────────
 
     def test_alert_has_correct_metadata(self):
         events = [_make_failure(offset_seconds=i * 10) for i in range(7)]

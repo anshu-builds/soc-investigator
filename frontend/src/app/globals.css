@@ -41,8 +41,6 @@ body { min-height: 100vh; background: var(--bg-primary); color: var(--ink); font
 @keyframes typingDot { 0%,80%,100% { transform: scale(.7); opacity: .4; } 40% { transform: scale(1); opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; } }
 
-/* ─── Investigation Report ─────────────────────────────────────────────── */
-
 .investigation-report {
   font-size: 0.875rem;
   line-height: 1.7;
@@ -53,7 +51,6 @@ body { min-height: 100vh; background: var(--bg-primary); color: var(--ink); font
   margin-top: 0;
 }
 
-/* Section headings: SUMMARY, TIMELINE, EVIDENCE, etc. */
 .ir-section-heading {
   font-size: 0.6875rem;
   font-weight: 600;
@@ -76,40 +73,34 @@ body { min-height: 100vh; background: var(--bg-primary); color: var(--ink); font
   margin-bottom: 0.5rem;
 }
 
-/* Paragraphs */
 .ir-paragraph {
   margin: 0.375rem 0;
   line-height: 1.7;
 }
 
-/* Bullet lists */
 .ir-list {
   margin: 0.375rem 0;
   padding-left: 1.25rem;
   list-style-type: disc;
 }
 
-/* Numbered lists */
 .ir-list-ordered {
   margin: 0.375rem 0;
   padding-left: 1.25rem;
   list-style-type: decimal;
 }
 
-/* List items */
 .ir-list-item {
   margin: 0.375rem 0;
   padding-left: 0.125rem;
   line-height: 1.65;
 }
 
-/* Bold text */
 .ir-strong {
   font-weight: 600;
   color: #111827;
 }
 
-/* Inline code */
 .ir-inline-code {
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.8125rem;
@@ -119,7 +110,6 @@ body { min-height: 100vh; background: var(--bg-primary); color: var(--ink); font
   padding: 0.0625rem 0.3125rem;
 }
 
-/* Code blocks */
 .ir-code-block {
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.8125rem;
@@ -131,14 +121,12 @@ body { min-height: 100vh; background: var(--bg-primary); color: var(--ink); font
   margin: 0.5rem 0;
 }
 
-/* Dividers */
 .ir-divider {
   border: none;
   border-top: 1px solid #e6e8eb;
   margin: 0.75rem 0;
 }
 
-/* Footer: answer type + confidence */
 .ir-footer {
   display: flex;
   align-items: center;
@@ -159,15 +147,10 @@ body { min-height: 100vh; background: var(--bg-primary); color: var(--ink); font
   margin-left: 0.5rem;
 }
 
-/* Evidence chips inside report (inherit from existing .evidence-chip) */
 .investigation-report .evidence-chip {
   margin: 0 0.125rem;
   vertical-align: baseline;
 }
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   INCIDENT REPORT — Screen + Print Styles
-   ═══════════════════════════════════════════════════════════════════════════ */
 
 .incident-report {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
@@ -176,7 +159,6 @@ body { min-height: 100vh; background: var(--bg-primary); color: var(--ink); font
   color: #344054;
 }
 
-/* ── Report Title ── */
 .ir-report-title {
   font-size: 1.375rem;
   font-weight: 700;
@@ -186,7 +168,6 @@ body { min-height: 100vh; background: var(--bg-primary); color: var(--ink); font
   line-height: 1.3;
 }
 
-/* ── Section Titles (## 1. Executive Summary, etc.) ── */
 .ir-section-title {
   font-size: 0.75rem;
   font-weight: 600;
@@ -207,7 +188,6 @@ body { min-height: 100vh; background: var(--bg-primary); color: var(--ink); font
   margin-top: 0;
 }
 
-/* ── Subsection Titles (### [EV-001], ### Auth Failure Pattern) ── */
 .ir-subsection-title {
   font-size: 0.8125rem;
   font-weight: 600;
@@ -224,45 +204,38 @@ body { min-height: 100vh; background: var(--bg-primary); color: var(--ink); font
   page-break-after: avoid;
 }
 
-/* ── Body Text ── */
 .ir-body {
   margin: 0.375rem 0;
   line-height: 1.6;
 }
 
-/* ── Strong Text ── */
 .ir-strong {
   font-weight: 600;
   color: #111827;
 }
 
-/* ── Italic ── */
 .ir-em {
   color: #667085;
   font-style: italic;
 }
 
-/* ── Unordered Lists ── */
 .ir-ul {
   margin: 0.375rem 0;
   padding-left: 1.25rem;
   list-style-type: disc;
 }
 
-/* ── Ordered Lists ── */
 .ir-ol {
   margin: 0.375rem 0;
   padding-left: 1.25rem;
   list-style-type: decimal;
 }
 
-/* ── List Items ── */
 .ir-li {
   margin: 0.2rem 0;
   line-height: 1.55;
 }
 
-/* ── Tables ── */
 .ir-table-wrap {
   margin: 0.5rem 0;
   overflow-x: auto;
@@ -307,7 +280,6 @@ body { min-height: 100vh; background: var(--bg-primary); color: var(--ink); font
   background: #fafbfc;
 }
 
-/* ── Blockquotes (MITRE technique cards) ── */
 .ir-blockquote {
   margin: 0.5rem 0;
   padding: 0.5rem 0.75rem;
@@ -327,13 +299,11 @@ body { min-height: 100vh; background: var(--bg-primary); color: var(--ink); font
   color: #5b21b6;
 }
 
-/* ── Evidence block card ── */
 .ir-evidence-block {
   break-inside: avoid;
   page-break-inside: avoid;
 }
 
-/* ── Code Blocks (raw logs) ── */
 .ir-code-block {
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   font-size: 0.75rem;
@@ -349,7 +319,6 @@ body { min-height: 100vh; background: var(--bg-primary); color: var(--ink); font
   page-break-inside: avoid;
 }
 
-/* ── Inline Code ── */
 .ir-inline-code {
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.8em;
@@ -359,20 +328,17 @@ body { min-height: 100vh; background: var(--bg-primary); color: var(--ink); font
   padding: 0.0625rem 0.3125rem;
 }
 
-/* ── Horizontal Rules ── */
 .ir-hr {
   border: none;
   border-top: 1px solid #e6e8eb;
   margin: 1rem 0;
 }
 
-/* ── Evidence Chips inside report ── */
 .incident-report .evidence-chip {
   margin: 0 0.125rem;
   vertical-align: baseline;
 }
 
-/* ── Print footer ── */
 .ir-print-footer {
   margin-top: 1.5rem;
   padding-top: 0.75rem;
@@ -384,12 +350,7 @@ body { min-height: 100vh; background: var(--bg-primary); color: var(--ink); font
   page-break-inside: avoid;
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
-   PRINT STYLES
-   ═══════════════════════════════════════════════════════════════════════════ */
-
 @media print {
-  /* Hide all application chrome */
   aside,
   nav[aria-label],
   .print\:hidden,
@@ -397,7 +358,6 @@ body { min-height: 100vh; background: var(--bg-primary); color: var(--ink); font
     display: none !important;
   }
 
-  /* Remove sidebar padding from main content */
   main {
     padding-left: 0 !important;
     margin-left: 0 !important;
@@ -405,7 +365,6 @@ body { min-height: 100vh; background: var(--bg-primary); color: var(--ink); font
     margin-top: 0 !important;
   }
 
-  /* Reset page layout */
   body {
     background: white !important;
     color: #111827 !important;
@@ -413,7 +372,6 @@ body { min-height: 100vh; background: var(--bg-primary); color: var(--ink); font
     line-height: 1.5 !important;
   }
 
-  /* Remove card styling for the report container */
   .incident-report.card {
     border: none !important;
     box-shadow: none !important;
@@ -421,13 +379,11 @@ body { min-height: 100vh; background: var(--bg-primary); color: var(--ink); font
     margin: 0 !important;
   }
 
-  /* Page margins */
   @page {
     margin: 12mm 14mm;
     size: A4 portrait;
   }
 
-  /* Page break control */
   .ir-section-title {
     break-before: auto !important;
     page-break-before: auto !important;
@@ -519,7 +475,6 @@ body { min-height: 100vh; background: var(--bg-primary); color: var(--ink); font
     margin: 0.75rem 0 !important;
   }
 
-  /* Print typography adjustments */
   .ir-report-title {
     font-size: 18pt !important;
     margin-bottom: 0.5rem !important;
@@ -543,7 +498,6 @@ body { min-height: 100vh; background: var(--bg-primary); color: var(--ink); font
     margin: 0.15rem 0 !important;
   }
 
-  /* Evidence chips in print */
   .evidence-chip {
     background: #eef3ff !important;
     border-color: #b3c7e8 !important;
@@ -551,12 +505,10 @@ body { min-height: 100vh; background: var(--bg-primary); color: var(--ink); font
     print-color-adjust: exact;
   }
 
-  /* Remove hover effects */
   .ir-tr:hover {
     background: transparent !important;
   }
 
-  /* Show print footer */
   .ir-print-footer {
     display: block !important;
     font-size: 8pt !important;
@@ -569,6 +521,3 @@ body { min-height: 100vh; background: var(--bg-primary); color: var(--ink); font
     page-break-inside: avoid !important;
   }
 }
-
-
-
