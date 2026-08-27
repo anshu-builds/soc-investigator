@@ -1,20 +1,3 @@
-name: CI
-
-on:
-  pull_request:
-    branches:
-      - main
-
-  push:
-    branches:
-      - main
-      - lead-integration
-      - backend-api
-      - frontend-dashboard
-      - frontend-investigation
-      - security-engine
-      - ai-integration
-
 jobs:
 
   backend-tests:
