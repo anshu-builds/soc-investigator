@@ -1,3 +1,20 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+
+  push:
+    branches:
+      - main
+      - lead-integration
+      - backend-api
+      - frontend-dashboard
+      - frontend-investigation
+      - security-engine
+      - ai-integration
+
 jobs:
 
   backend-tests:
@@ -22,7 +39,7 @@ jobs:
           pip install pytest
 
       - name: Run tests
-	env:
+        env:
           PYTHONPATH: .
         run: |
           pytest -q
