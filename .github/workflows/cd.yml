@@ -69,6 +69,35 @@ jobs:
             echo "Deploying commit: ${{ github.sha }}"
             echo "=========================================="
 
+            echo "Docker disk usage before cleanup:"
+            docker system df || true
+
+            echo "Removing stopped containers and unused images/build cache (preserving volumes)..."
+            docker container prune -f || true
+            docker image prune -af || true
+            docker builder prune -af || true
+
+            echo "Docker disk usage after cleanup:"
+            docker system df || true
+
+            if ! docker info >/dev/null 2>&1; then
+              echo "Docker daemon is unavailable on the EC2 host."
+              exit 1
+            fi
+
+            echo "Checking available disk space on the Docker host:"
+            df -h /var/lib/docker || df -h /
+
+            AVAILABLE_BYTES=$(df -PB1 /var/lib/docker 2>/dev/null | awk 'NR==2 {print $4}')
+            if [ -z "$AVAILABLE_BYTES" ]; then
+              AVAILABLE_BYTES=$(df -PB1 / 2>/dev/null | awk 'NR==2 {print $4}')
+            fi
+
+            if [ -n "$AVAILABLE_BYTES" ] && [ "$AVAILABLE_BYTES" -lt $((2 * 1024 * 1024 * 1024)) ]; then
+              echo "Insufficient free space remains after cleanup (< 2 GiB). Aborting before image pull to avoid a late failure."
+              exit 1
+            fi
+
             echo "Pulling backend image for this commit..."
             docker pull ghcr.io/${{ github.repository_owner }}/soc-investigator-backend:${{ github.sha }}
 
