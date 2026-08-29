@@ -32,6 +32,7 @@ jobs:
           context: .
           file: backend/Dockerfile
           push: true
+          no-cache: true
           tags: |
             ghcr.io/${{ github.repository_owner }}/soc-investigator-backend:latest
             ghcr.io/${{ github.repository_owner }}/soc-investigator-backend:${{ github.sha }}
@@ -58,24 +59,60 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
+
           script: |
             set -e
 
             cd ~/soc-investigator-deploy
 
-            echo "Pulling latest backend image..."
-            docker pull ghcr.io/anshu-builds/soc-investigator-backend:latest
+            echo "=========================================="
+            echo "Deploying commit: ${{ github.sha }}"
+            echo "=========================================="
 
-            echo "Pulling latest frontend image..."
-            docker pull ghcr.io/anshu-builds/soc-investigator-frontend:latest
+            echo "Pulling backend image for this commit..."
+            docker pull ghcr.io/${{ github.repository_owner }}/soc-investigator-backend:${{ github.sha }}
 
-            echo "Recreating application containers..."
+            echo "Pulling frontend image for this commit..."
+            docker pull ghcr.io/${{ github.repository_owner }}/soc-investigator-frontend:${{ github.sha }}
+
+            echo "Tagging backend image as latest..."
+            docker tag \
+              ghcr.io/${{ github.repository_owner }}/soc-investigator-backend:${{ github.sha }} \
+              ghcr.io/${{ github.repository_owner }}/soc-investigator-backend:latest
+
+            echo "Tagging frontend image as latest..."
+            docker tag \
+              ghcr.io/${{ github.repository_owner }}/soc-investigator-frontend:${{ github.sha }} \
+              ghcr.io/${{ github.repository_owner }}/soc-investigator-frontend:latest
+
+            echo "Stopping old backend and frontend containers..."
+            docker compose stop backend frontend || true
+
+            echo "Removing old backend and frontend containers..."
+            docker compose rm -f backend frontend || true
+
+            echo "Starting backend and frontend with new images..."
             docker compose up -d --no-deps backend frontend
 
             echo "Restarting Nginx..."
             docker compose up -d nginx
 
-            echo "Deployment completed."
+            echo "Waiting for containers to start..."
+            sleep 10
+
+            echo "=========================================="
+            echo "Deployment completed"
+            echo "=========================================="
 
             echo "Running containers:"
             docker ps
+
+            echo "=========================================="
+            echo "Backend image:"
+            echo "=========================================="
+            docker inspect soc_backend --format '{{.Image}}'
+
+            echo "=========================================="
+            echo "Frontend image:"
+            echo "=========================================="
+            docker inspect soc_frontend --format '{{.Image}}'
