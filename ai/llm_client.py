@@ -49,7 +49,7 @@ async def _call_gemini(system_prompt: str, user_prompt: str) -> str:
         config=types.GenerateContentConfig(
             system_instruction=system_prompt,
             temperature=0.2,
-            max_output_tokens=1500,
+            max_output_tokens=3000,
         ),
     )
 
