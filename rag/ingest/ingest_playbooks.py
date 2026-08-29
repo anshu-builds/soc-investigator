@@ -46,5 +46,19 @@ def _chunk_text(text: str, chunk_size: int = 500, overlap: int = 100) -> list[st
     return [c for c in chunks if len(c.strip()) > 50]
 
 
+def ensure_playbooks_ingested() -> bool:
+    """Ingest playbooks if the ChromaDB knowledge collection is empty."""
+    try:
+        store = VectorStore()
+        if store.count() == 0:
+            print("[RAG] ChromaDB knowledge collection empty. Auto-ingesting playbooks...")
+            ingest_playbooks()
+            return True
+        return False
+    except Exception as e:
+        print(f"[RAG] Startup playbook ingestion check skipped: {e}")
+        return False
+
+
 if __name__ == "__main__":
     ingest_playbooks()

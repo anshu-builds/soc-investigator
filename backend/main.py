@@ -42,6 +42,11 @@ settings = get_settings()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await create_all_tables()
+    try:
+        from rag.ingest.ingest_playbooks import ensure_playbooks_ingested
+        ensure_playbooks_ingested()
+    except Exception as e:
+        logging.getLogger("soc.backend").warning("Startup playbook check skipped: %s", e)
     yield
 
 
