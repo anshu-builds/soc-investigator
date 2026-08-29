@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     seed_admin_email: str = "analyst@demo.com"
     seed_admin_password: str = "demo1234"
 
+    # Wazuh integration
+    wazuh_webhook_secret: str = ""
+
     @property
     def cors_origins_list(self) -> List[str]:
         return [o.strip() for o in self.cors_origins.split(",")]

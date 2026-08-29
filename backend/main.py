@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import hmac
+import logging
 import sys
 import time
 import uuid
+from collections import OrderedDict
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import List, Optional
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, Request, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from sqlalchemy import func, select
@@ -379,3 +382,131 @@ async def dashboard_summary(
         severity_distribution=severity_counts,
         recent_incidents=recent,
     )
+
+
+# ── Wazuh Integration ────────────────────────────────────────────────────────
+
+wazuh_logger = logging.getLogger("soc.wazuh")
+
+# In-memory LRU dedup cache (bounded at 10 000 entries)
+_DEDUP_MAX = 10_000
+_dedup_cache: OrderedDict[str, bool] = OrderedDict()
+
+
+def _is_duplicate(digest: str) -> bool:
+    """Return True if *digest* has been committed before."""
+    return digest in _dedup_cache
+
+
+def _record_dedup(digests: List[str]) -> None:
+    """Record digests into LRU cache only after successful commit."""
+    for digest in digests:
+        _dedup_cache[digest] = True
+        _dedup_cache.move_to_end(digest)
+        while len(_dedup_cache) > _DEDUP_MAX:
+            _dedup_cache.popitem(last=False)
+
+
+@app.post("/api/integrations/wazuh/alerts", tags=["wazuh"])
+async def ingest_wazuh_alerts(
+    request: Request,
+    x_wazuh_token: Optional[str] = Header(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Receive Wazuh alerts via webhook and process through the SOC pipeline."""
+    from backend.services.wazuh_adapter import (
+        WazuhIngestionRequest,
+        WazuhIngestionResponse,
+        compute_dedup_hash,
+        normalize_wazuh_alerts,
+    )
+
+    # --- authentication ---
+    secret = settings.wazuh_webhook_secret
+    if secret:
+        if not x_wazuh_token or not hmac.compare_digest(x_wazuh_token, secret):
+            wazuh_logger.warning("Wazuh webhook auth failed (invalid or missing token)")
+            raise HTTPException(status_code=401, detail="Invalid or missing X-Wazuh-Token")
+    else:
+        wazuh_logger.warning("WAZUH_WEBHOOK_SECRET is not configured — webhook is unauthenticated")
+
+    # --- request size check (1 MB) ---
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            cl_int = int(content_length)
+            if cl_int > 1_048_576:
+                raise HTTPException(status_code=413, detail="Payload exceeds 1 MB limit")
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid Content-Length header")
+
+    # --- parse and validate ---
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=422, detail="Invalid JSON payload")
+
+    try:
+        payload = WazuhIngestionRequest.model_validate(body)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"Validation error: {e}")
+
+    # --- process alerts ---
+    duplicates = 0
+    errors: List[str] = []
+    fresh_alerts = []
+    fresh_digests = []
+
+    for alert in payload.alerts:
+        digest = compute_dedup_hash(alert)
+        if _is_duplicate(digest):
+            duplicates += 1
+            continue
+        fresh_alerts.append(alert)
+        fresh_digests.append(digest)
+
+    if not fresh_alerts:
+        return WazuhIngestionResponse(
+            received=len(payload.alerts),
+            processed=0,
+            duplicates=duplicates,
+        )
+
+    try:
+        normalized = normalize_wazuh_alerts(fresh_alerts)
+        events_parsed, events_flagged, incidents_created = await run_pipeline(
+            db, [], "", _pre_normalized=normalized
+        )
+        await db.commit()
+        # Mark as processed only after successful database commit
+        _record_dedup(fresh_digests)
+    except Exception:
+        await db.rollback()
+        wazuh_logger.exception("Wazuh pipeline processing error")
+        raise HTTPException(status_code=500, detail="Internal error processing security alerts")
+
+    wazuh_logger.info(
+        "Wazuh ingestion: received=%d processed=%d duplicates=%d flagged=%d incidents=%d",
+        len(payload.alerts),
+        len(fresh_alerts),
+        duplicates,
+        events_flagged,
+        incidents_created,
+    )
+
+    return WazuhIngestionResponse(
+        received=len(payload.alerts),
+        processed=len(fresh_alerts),
+        duplicates=duplicates,
+        errors=errors,
+    )
+
+
+@app.get("/api/integrations/wazuh/status", tags=["wazuh"])
+async def wazuh_status():
+    """Health check for the Wazuh integration."""
+    return {
+        "status": "ready",
+        "authentication": "configured" if settings.wazuh_webhook_secret else "unconfigured",
+        "dedup_cache_size": len(_dedup_cache),
+    }
