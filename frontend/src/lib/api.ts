@@ -12,7 +12,7 @@ import type {
   SessionCreateResponse,
 } from './types'
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || ''
 
 function getToken(): string {
   if (typeof window === 'undefined') return ''
