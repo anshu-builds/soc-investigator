@@ -1,9 +1,4 @@
-"""Unit tests for the Wazuh webhook API endpoint.
-
-These tests use FastAPI's TestClient to simulate HTTP requests.
-No running Wazuh Manager or database is required — the pipeline call
-is mocked to isolate endpoint logic.
-"""
+"""Tests for Wazuh webhook endpoint."""
 
 from __future__ import annotations
 
@@ -25,17 +20,10 @@ from tests.fixtures.wazuh_alerts import (
 )
 
 
-# ---------------------------------------------------------------------------
-# Test client setup
-# ---------------------------------------------------------------------------
-
-# Patch settings before importing the app to ensure consistent config
 @pytest.fixture(autouse=True)
 def _patch_settings(monkeypatch):
-    """Set WAZUH_WEBHOOK_SECRET for test isolation."""
     monkeypatch.setenv("WAZUH_WEBHOOK_SECRET", "test-secret-42")
 
-    # Clear settings cache so new env vars take effect
     from backend.config import get_settings
     get_settings.cache_clear()
     yield
@@ -44,11 +32,9 @@ def _patch_settings(monkeypatch):
 
 @pytest.fixture
 def client():
-    """FastAPI TestClient with mocked database dependency."""
     from backend.main import app, _dedup_cache
     from backend.database import get_db
 
-    # Clear dedup cache between tests
     _dedup_cache.clear()
 
     async def _mock_db():
@@ -68,11 +54,6 @@ def client():
 
 VALID_PAYLOAD = {"alerts": [ssh_auth_failure()]}
 HEADERS = {"X-Wazuh-Token": "test-secret-42"}
-
-
-# ---------------------------------------------------------------------------
-# Authentication tests
-# ---------------------------------------------------------------------------
 
 
 class TestWazuhAuth:
@@ -99,11 +80,6 @@ class TestWazuhAuth:
             headers={"X-Wazuh-Token": "wrong-secret"},
         )
         assert resp.status_code == 401
-
-
-# ---------------------------------------------------------------------------
-# Payload validation tests
-# ---------------------------------------------------------------------------
 
 
 class TestWazuhValidation:
@@ -139,7 +115,6 @@ class TestWazuhValidation:
         )
         assert resp.status_code == 422
 
-
     def test_malformed_content_length_returns_400(self, client):
         resp = client.post(
             "/api/integrations/wazuh/alerts",
@@ -150,15 +125,9 @@ class TestWazuhValidation:
         assert "Content-Length" in resp.json()["detail"]
 
 
-# ---------------------------------------------------------------------------
-# Deduplication & Retry tests
-# ---------------------------------------------------------------------------
-
-
 class TestWazuhDedup:
     def test_duplicate_alert_not_reprocessed(self, client):
         with patch("backend.main.run_pipeline", new_callable=AsyncMock, return_value=(1, 0, 0)) as mock_pipeline:
-            # First request
             resp1 = client.post(
                 "/api/integrations/wazuh/alerts",
                 json=VALID_PAYLOAD,
@@ -167,7 +136,6 @@ class TestWazuhDedup:
             assert resp1.status_code == 200
             assert resp1.json()["processed"] == 1
 
-            # Same alert again
             resp2 = client.post(
                 "/api/integrations/wazuh/alerts",
                 json=VALID_PAYLOAD,
@@ -176,13 +144,10 @@ class TestWazuhDedup:
             assert resp2.status_code == 200
             assert resp2.json()["duplicates"] == 1
             assert resp2.json()["processed"] == 0
-
-            # Pipeline only called once
             assert mock_pipeline.call_count == 1
 
     def test_failed_processing_can_be_retried(self, client):
-        """If run_pipeline or DB fails, the alert is not marked as duplicate and can be retried."""
-        with patch("backend.main.run_pipeline", new_callable=AsyncMock, side_effect=RuntimeError("DB write failed")) as mock_pipeline:
+        with patch("backend.main.run_pipeline", new_callable=AsyncMock, side_effect=RuntimeError("DB write failed")):
             resp1 = client.post(
                 "/api/integrations/wazuh/alerts",
                 json=VALID_PAYLOAD,
@@ -190,7 +155,6 @@ class TestWazuhDedup:
             )
             assert resp1.status_code == 500
 
-        # Subsequent retry after issue resolves succeeds and is NOT treated as duplicate
         with patch("backend.main.run_pipeline", new_callable=AsyncMock, return_value=(1, 0, 0)) as mock_pipeline_retry:
             resp2 = client.post(
                 "/api/integrations/wazuh/alerts",
@@ -201,11 +165,6 @@ class TestWazuhDedup:
             assert resp2.json()["processed"] == 1
             assert resp2.json()["duplicates"] == 0
             assert mock_pipeline_retry.call_count == 1
-
-
-# ---------------------------------------------------------------------------
-# Successful & Error processing tests
-# ---------------------------------------------------------------------------
 
 
 class TestWazuhProcessing:
@@ -237,7 +196,6 @@ class TestWazuhProcessing:
         assert "errors" in data
 
     def test_pipeline_error_returns_generic_500_without_exposing_exception(self, client):
-        """Internal stack traces or exception strings must not leak to caller."""
         with patch("backend.main.run_pipeline", new_callable=AsyncMock, side_effect=ValueError("Sensitive database schema details")):
             resp = client.post(
                 "/api/integrations/wazuh/alerts",
@@ -248,11 +206,6 @@ class TestWazuhProcessing:
         detail = resp.json()["detail"]
         assert "Sensitive database schema details" not in detail
         assert detail == "Internal error processing security alerts"
-
-
-# ---------------------------------------------------------------------------
-# Status endpoint tests
-# ---------------------------------------------------------------------------
 
 
 class TestWazuhStatus:

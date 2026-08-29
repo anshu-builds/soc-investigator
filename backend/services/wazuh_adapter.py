@@ -1,18 +1,4 @@
-"""Wazuh Alert → NormalizedEvent adapter.
-
-Translates Wazuh Manager alert JSON into the existing ``NormalizedEvent``
-dataclass so that alerts flow through the existing detection → correlation →
-incident → AI → report pipeline unchanged.
-
-EventType mapping uses a **semantic priority chain**:
-  1. rule.groups keywords
-  2. data-field signatures
-  3. decoder.name patterns
-  4. rule.description keyword fallback
-  5. EventType.UNKNOWN
-
-Rule IDs are preserved as provenance metadata, NOT used for classification.
-"""
+"""Wazuh alert normalizer adapter."""
 
 from __future__ import annotations
 
@@ -28,10 +14,6 @@ from pydantic import BaseModel, Field, field_validator
 from detection import EventType, NormalizedEvent
 
 logger = logging.getLogger("soc.wazuh")
-
-# ---------------------------------------------------------------------------
-# Pydantic models for Wazuh alert payload validation
-# ---------------------------------------------------------------------------
 
 
 class WazuhRule(BaseModel):
@@ -53,11 +35,7 @@ class WazuhDecoder(BaseModel):
 
 
 class WazuhAlert(BaseModel):
-    """Validates a single Wazuh alert payload.
-
-    Only ``rule``, ``agent``, and ``timestamp`` are required.  Every other
-    field is optional and extracted defensively.
-    """
+    """Wazuh alert payload schema."""
 
     timestamp: str
     rule: WazuhRule
@@ -75,7 +53,7 @@ class WazuhAlert(BaseModel):
 
 
 class WazuhIngestionRequest(BaseModel):
-    """Top-level request body for the webhook endpoint."""
+    """Webhook ingestion request payload."""
 
     alerts: List[WazuhAlert] = Field(..., min_length=1, max_length=500)
 
@@ -86,10 +64,6 @@ class WazuhIngestionResponse(BaseModel):
     duplicates: int
     errors: List[str] = Field(default_factory=list)
 
-
-# ---------------------------------------------------------------------------
-# Severity mapping
-# ---------------------------------------------------------------------------
 
 _SEVERITY_MAP: List[Tuple[int, str]] = [
     (12, "CRITICAL"),
@@ -106,11 +80,7 @@ def _map_severity(level: int) -> str:
     return "LOW"
 
 
-# ---------------------------------------------------------------------------
-# Semantic EventType mapping
-# ---------------------------------------------------------------------------
-
-# Priority 1 — rule.groups keywords (case-insensitive set membership)
+# Rule group keywords
 _GROUP_AUTH_FAILURE: Set[str] = {
     "authentication_failed",
     "login_failed",
@@ -148,7 +118,6 @@ _GROUP_PROCESS_EXEC: Set[str] = {
 
 
 def _classify_by_groups(groups: List[str]) -> Optional[EventType]:
-    """Priority 1: classify using rule.groups keywords."""
     lower_groups = {g.lower() for g in groups}
 
     if lower_groups & _GROUP_AUTH_FAILURE:
@@ -165,7 +134,6 @@ def _classify_by_groups(groups: List[str]) -> Optional[EventType]:
 
 
 def _classify_by_data(data: Optional[Dict[str, Any]]) -> Optional[EventType]:
-    """Priority 2: classify using data-field signatures."""
     if not data:
         return None
 
@@ -188,21 +156,13 @@ def _classify_by_data(data: Optional[Dict[str, Any]]) -> Optional[EventType]:
 
 
 def _classify_by_decoder(decoder_name: str) -> Optional[EventType]:
-    """Priority 3: narrow classification hint from decoder name.
-
-    Returns ``None`` when the decoder is ambiguous (e.g. ``sshd`` could be
-    success or failure).  The caller should fall through to the next priority.
-    """
     lower = decoder_name.lower()
     if "syscheck" in lower:
         return EventType.FILE_ACCESS
-    # sshd / pam / auth decoders are ambiguous — do not classify here
     return None
 
 
-# Keyword sets for rule.description fallback (priority 4).
-# Reuses the same concepts as detection/normalizer.py but applied to Wazuh's
-# rule.description field.
+# Description keywords
 _DESC_AUTH_FAILURE_KW = {
     "authentication failure",
     "failed login",
@@ -255,7 +215,6 @@ _DESC_PROCESS_EXEC_KW = {
 
 
 def _classify_by_description(description: str) -> Optional[EventType]:
-    """Priority 4: keyword scan on rule.description."""
     lower = description.lower()
 
     for kw in _DESC_AUTH_FAILURE_KW:
@@ -277,14 +236,7 @@ def _classify_by_description(description: str) -> Optional[EventType]:
 
 
 def map_event_type(alert: WazuhAlert) -> EventType:
-    """Determine ``EventType`` using the semantic priority chain.
-
-    1. rule.groups
-    2. data field signatures
-    3. decoder.name
-    4. rule.description keywords
-    5. ``EventType.UNKNOWN``
-    """
+    """Classify alert EventType from groups, data fields, decoder, or description."""
     result = _classify_by_groups(alert.rule.groups)
     if result is not None:
         return result
@@ -305,12 +257,7 @@ def map_event_type(alert: WazuhAlert) -> EventType:
     return EventType.UNKNOWN
 
 
-# ---------------------------------------------------------------------------
-# Timestamp parsing
-# ---------------------------------------------------------------------------
-
 def _parse_timestamp(raw: str) -> datetime:
-    """Parse Wazuh timestamp (ISO 8601 variants)."""
     raw = raw.strip()
     try:
         iso_raw = raw.replace("Z", "+00:00")
@@ -323,16 +270,8 @@ def _parse_timestamp(raw: str) -> datetime:
         return datetime.now(tz=timezone.utc)
 
 
-# ---------------------------------------------------------------------------
-# Deduplication
-# ---------------------------------------------------------------------------
-
 def compute_dedup_hash(alert: WazuhAlert) -> str:
-    """SHA-256 hash for idempotency check.
-
-    Key components: agent_id + rule_id + timestamp + first 256 chars of
-    full_log.
-    """
+    """Generate SHA-256 fingerprint for alert deduplication."""
     parts = [
         alert.agent.id,
         alert.rule.id,
@@ -343,19 +282,10 @@ def compute_dedup_hash(alert: WazuhAlert) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
-# ---------------------------------------------------------------------------
-# Core normalizer
-# ---------------------------------------------------------------------------
-
 def normalize_wazuh_alert(alert: WazuhAlert) -> NormalizedEvent:
-    """Convert a validated ``WazuhAlert`` into a ``NormalizedEvent``.
-
-    The returned event carries full Wazuh provenance in ``metadata`` and is
-    compatible with the existing detection → correlation → incident pipeline.
-    """
+    """Convert a WazuhAlert into a NormalizedEvent with provenance."""
     data = alert.data or {}
 
-    # --- field extraction with fallbacks ---
     source_ip = (
         data.get("srcip")
         or (alert.agent.ip if alert.agent.ip else None)
@@ -373,7 +303,6 @@ def normalize_wazuh_alert(alert: WazuhAlert) -> NormalizedEvent:
     hostname = alert.agent.name or None
     description = alert.rule.description or ""
 
-    # Prefer full_log; fall back to serialized alert
     raw_log = alert.full_log or json.dumps(
         alert.model_dump(mode="python"), default=str
     )
@@ -382,32 +311,18 @@ def normalize_wazuh_alert(alert: WazuhAlert) -> NormalizedEvent:
     event_type = map_event_type(alert)
     severity = _map_severity(alert.rule.level)
 
-    # --- provenance metadata ---
     metadata: Dict[str, Any] = {
-        # Source identification
         "source_type": "wazuh",
         "source_file": f"wazuh://agent/{alert.agent.name or 'unknown'}/rule/{alert.rule.id}",
-
-        # Wazuh rule provenance
         "wazuh_rule_id": alert.rule.id,
         "wazuh_rule_level": alert.rule.level,
         "wazuh_rule_description": alert.rule.description,
         "wazuh_rule_groups": alert.rule.groups,
-
-        # Agent provenance
         "wazuh_agent_id": alert.agent.id,
         "wazuh_agent_name": alert.agent.name,
-
-        # Decoder provenance
         "wazuh_decoder": alert.decoder.name if alert.decoder else "",
-
-        # MITRE metadata (when available)
         "wazuh_mitre": alert.rule.mitre,
-
-        # Severity provenance
         "severity_raw": severity,
-
-        # Raw event preservation (complete original alert)
         "wazuh_raw": alert.model_dump(mode="python"),
     }
 

@@ -1,10 +1,4 @@
-"""End-to-end fixture tests: Wazuh alert → normalize → detection → correlation → incident.
-
-These tests verify that Wazuh-originated NormalizedEvents are compatible
-with the existing detection engine, correlator, and incident-creation logic.
-
-All tests are fixture-based.  No database or running services required.
-"""
+"""Integration tests for Wazuh alert pipeline."""
 
 from __future__ import annotations
 
@@ -36,31 +30,21 @@ from tests.fixtures.wazuh_alerts import (
 
 
 def _normalize_fixtures(raw_alerts):
-    """Parse and normalize a list of raw Wazuh alert dicts."""
     alerts = [WazuhAlert.model_validate(r) for r in raw_alerts]
     return normalize_wazuh_alerts(alerts)
 
 
-# ---------------------------------------------------------------------------
-# Detection compatibility
-# ---------------------------------------------------------------------------
-
-
 class TestDetectionCompatibility:
-    """Wazuh-originated events must work with the existing DetectionEngine."""
-
     def test_brute_force_detected(self):
-        """7 failed SSH logins within 5 minutes should trigger BRUTE_FORCE."""
         events = _normalize_fixtures(brute_force_scenario(count=7, interval_seconds=30))
         engine = DetectionEngine()
         alerts = engine.run(events)
 
         assert len(alerts) >= 1
         bf_alerts = [a for a in alerts if a.rule_name == "BRUTE_FORCE"]
-        assert len(bf_alerts) >= 1, f"Expected BRUTE_FORCE alert, got: {[a.rule_name for a in alerts]}"
+        assert len(bf_alerts) >= 1
 
     def test_account_compromise_detected(self):
-        """5 failures + 1 success from same IP should trigger ACCOUNT_COMPROMISE."""
         events = _normalize_fixtures(
             account_compromise_scenario(failure_count=5, interval_seconds=20)
         )
@@ -68,10 +52,9 @@ class TestDetectionCompatibility:
         alerts = engine.run(events)
 
         compromise_alerts = [a for a in alerts if a.rule_name == "ACCOUNT_COMPROMISE"]
-        assert len(compromise_alerts) >= 1, f"Expected ACCOUNT_COMPROMISE, got: {[a.rule_name for a in alerts]}"
+        assert len(compromise_alerts) >= 1
 
     def test_all_events_have_correct_type(self):
-        """Verify EventType mapping survives the normalization layer."""
         events = _normalize_fixtures(
             account_compromise_scenario(failure_count=3, interval_seconds=10)
         )
@@ -81,7 +64,6 @@ class TestDetectionCompatibility:
         assert len(successes) == 1
 
     def test_below_threshold_no_alert(self):
-        """2 failures should NOT trigger brute force (threshold is 5)."""
         events = _normalize_fixtures(brute_force_scenario(count=2))
         engine = DetectionEngine()
         alerts = engine.run(events)
@@ -89,14 +71,7 @@ class TestDetectionCompatibility:
         assert len(bf_alerts) == 0
 
 
-# ---------------------------------------------------------------------------
-# Correlation compatibility
-# ---------------------------------------------------------------------------
-
-
 class TestCorrelationCompatibility:
-    """Wazuh-originated alerts must correlate into IncidentGroups."""
-
     def test_brute_force_correlates(self):
         events = _normalize_fixtures(brute_force_scenario(count=7, interval_seconds=30))
         engine = DetectionEngine()
@@ -121,14 +96,7 @@ class TestCorrelationCompatibility:
         assert len(group.all_event_ids) > 0
 
 
-# ---------------------------------------------------------------------------
-# Full pipeline: detection → correlation → hypothesis → timeline → MITRE
-# ---------------------------------------------------------------------------
-
-
 class TestFullPipeline:
-    """End-to-end: Wazuh alerts through the complete analysis pipeline."""
-
     def _run_full_pipeline(self, raw_alerts):
         events = _normalize_fixtures(raw_alerts)
         engine = DetectionEngine()
@@ -174,15 +142,12 @@ class TestFullPipeline:
         )
         assert group is not None
         assert "ESCALATION" in hypothesis["classification"] or "COMPROMISE" in hypothesis["classification"]
-        # Should have both T1110 and T1078 family techniques
         tech_ids = {t["technique_id"] for t in techniques}
         assert "T1110" in tech_ids
 
     def test_provenance_preserved_through_pipeline(self):
-        """Verify that Wazuh metadata survives the full pipeline."""
         events = _normalize_fixtures(brute_force_scenario(count=7, interval_seconds=30))
 
-        # Every event should carry wazuh provenance
         for event in events:
             assert event.metadata["source_type"] == "wazuh"
             assert "wazuh_rule_id" in event.metadata
@@ -190,16 +155,13 @@ class TestFullPipeline:
             assert "wazuh_raw" in event.metadata
             assert "wazuh_decoder" in event.metadata
 
-        # Provenance survives detection
         engine = DetectionEngine()
         alerts = engine.run(events)
         assert len(alerts) > 0
 
-        # Provenance survives correlation
         groups = correlate(alerts, events)
         assert len(groups) > 0
 
-        # Events in the group still have metadata
         event_map = {e.id: e for e in events}
         for eid in groups[0].all_event_ids:
             event = event_map[eid]

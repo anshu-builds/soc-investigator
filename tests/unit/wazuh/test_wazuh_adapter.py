@@ -1,7 +1,4 @@
-"""Unit tests for the Wazuh → NormalizedEvent adapter.
-
-All tests are fixture-based.  No running Wazuh Manager is required.
-"""
+"""Tests for Wazuh event normalization adapter."""
 
 from __future__ import annotations
 
@@ -12,7 +9,6 @@ from pathlib import Path
 
 import pytest
 
-# Ensure project root is importable
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from backend.services.wazuh_adapter import (
@@ -37,14 +33,7 @@ from tests.fixtures.wazuh_alerts import (
 )
 
 
-# ---------------------------------------------------------------------------
-# EventType mapping — Priority 1: rule.groups
-# ---------------------------------------------------------------------------
-
-
 class TestEventTypeMappingByGroups:
-    """Semantic mapping from rule.groups → EventType."""
-
     def test_auth_failure_from_groups(self):
         alert = WazuhAlert.model_validate(ssh_auth_failure())
         assert map_event_type(alert) == EventType.AUTH_FAILURE
@@ -66,14 +55,7 @@ class TestEventTypeMappingByGroups:
         assert map_event_type(alert) == EventType.UNKNOWN
 
 
-# ---------------------------------------------------------------------------
-# EventType mapping — Priority 2: data fields
-# ---------------------------------------------------------------------------
-
-
 class TestEventTypeMappingByData:
-    """Fallback classification from data field signatures."""
-
     def test_auth_failure_from_data_status(self):
         alert = WazuhAlert.model_validate(alert_with_data_status_only())
         assert map_event_type(alert) == EventType.AUTH_FAILURE
@@ -86,24 +68,12 @@ class TestEventTypeMappingByData:
         assert map_event_type(alert) == EventType.AUTH_SUCCESS
 
 
-# ---------------------------------------------------------------------------
-# EventType mapping — Priority 4: description keywords
-# ---------------------------------------------------------------------------
-
-
 class TestEventTypeMappingByDescription:
-    """Fallback classification from rule.description keywords."""
-
     def test_auth_failure_from_description(self):
         alert = WazuhAlert.model_validate(
             alert_with_no_groups_but_description_keywords()
         )
         assert map_event_type(alert) == EventType.AUTH_FAILURE
-
-
-# ---------------------------------------------------------------------------
-# Severity mapping
-# ---------------------------------------------------------------------------
 
 
 class TestSeverityMapping:
@@ -132,11 +102,6 @@ class TestSeverityMapping:
         assert _map_severity(4) == "LOW"
 
 
-# ---------------------------------------------------------------------------
-# Timestamp parsing
-# ---------------------------------------------------------------------------
-
-
 class TestTimestampParsing:
     def test_valid_iso_timestamp(self):
         alert = WazuhAlert.model_validate(ssh_auth_failure())
@@ -149,11 +114,6 @@ class TestTimestampParsing:
         alert = WazuhAlert.model_validate(raw)
         event = normalize_wazuh_alert(alert)
         assert isinstance(event.timestamp, datetime)
-
-
-# ---------------------------------------------------------------------------
-# Field mapping
-# ---------------------------------------------------------------------------
 
 
 class TestFieldMapping:
@@ -207,17 +167,10 @@ class TestFieldMapping:
         raw = minimal_alert()
         alert = WazuhAlert.model_validate(raw)
         event = normalize_wazuh_alert(alert)
-        assert len(event.raw_log) > 0  # serialized alert JSON
-
-
-# ---------------------------------------------------------------------------
-# Provenance preservation
-# ---------------------------------------------------------------------------
+        assert len(event.raw_log) > 0
 
 
 class TestProvenance:
-    """Every normalized Wazuh event must carry complete provenance."""
-
     def _normalize(self, fixture_fn, **kwargs):
         alert = WazuhAlert.model_validate(fixture_fn(**kwargs))
         return normalize_wazuh_alert(alert)
@@ -280,11 +233,6 @@ class TestProvenance:
         assert event.metadata["severity_raw"] == "MEDIUM"
 
 
-# ---------------------------------------------------------------------------
-# Deduplication hash
-# ---------------------------------------------------------------------------
-
-
 class TestDedup:
     def test_same_alert_produces_same_hash(self):
         raw = ssh_auth_failure()
@@ -296,11 +244,6 @@ class TestDedup:
         alert1 = WazuhAlert.model_validate(ssh_auth_failure(offset=0))
         alert2 = WazuhAlert.model_validate(ssh_auth_failure(offset=60))
         assert compute_dedup_hash(alert1) != compute_dedup_hash(alert2)
-
-
-# ---------------------------------------------------------------------------
-# Batch normalization
-# ---------------------------------------------------------------------------
 
 
 class TestBatchNormalization:
@@ -318,11 +261,6 @@ class TestBatchNormalization:
         events = normalize_wazuh_alerts(alerts)
         ids = [e.id for e in events]
         assert len(set(ids)) == 3
-
-
-# ---------------------------------------------------------------------------
-# Pydantic validation
-# ---------------------------------------------------------------------------
 
 
 class TestPayloadValidation:

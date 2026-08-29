@@ -1,11 +1,4 @@
-"""Representative Wazuh alert fixtures for testing.
-
-These fixtures are based on documented Wazuh alert JSON structure.
-They are synthetic — no real Wazuh Manager was involved.
-
-Each fixture is a raw Python dict matching the structure that Wazuh's
-custom integrations POST to external webhooks.
-"""
+"""Wazuh alert test fixtures."""
 
 from __future__ import annotations
 
@@ -15,16 +8,10 @@ from typing import Any, Dict, List
 
 
 def _ts(offset_seconds: int = 0, base: datetime | None = None) -> str:
-    """ISO 8601 timestamp with optional offset from base."""
     if base is None:
         base = datetime(2025, 6, 15, 14, 0, 0, tzinfo=timezone.utc)
     dt = base + timedelta(seconds=offset_seconds)
     return dt.strftime("%Y-%m-%dT%H:%M:%S.%f+00:00")
-
-
-# ---------------------------------------------------------------------------
-# Individual alert fixtures
-# ---------------------------------------------------------------------------
 
 
 def ssh_auth_failure(
@@ -34,7 +21,6 @@ def ssh_auth_failure(
     user: str = "admin",
     agent_name: str = "web-server-01",
 ) -> Dict[str, Any]:
-    """SSH failed authentication (Wazuh rule groups: sshd, authentication_failed)."""
     return {
         "timestamp": _ts(offset),
         "rule": {
@@ -70,7 +56,6 @@ def ssh_auth_success(
     user: str = "admin",
     agent_name: str = "web-server-01",
 ) -> Dict[str, Any]:
-    """SSH successful authentication (Wazuh rule groups: sshd, authentication_success)."""
     return {
         "timestamp": _ts(offset),
         "rule": {
@@ -105,7 +90,6 @@ def sudo_privilege_escalation(
     user: str = "admin",
     agent_name: str = "web-server-01",
 ) -> Dict[str, Any]:
-    """Sudo privilege change (Wazuh rule groups: sudo, priv_esc)."""
     return {
         "timestamp": _ts(offset),
         "rule": {
@@ -138,7 +122,6 @@ def file_integrity_alert(
     offset: int = 400,
     agent_name: str = "web-server-01",
 ) -> Dict[str, Any]:
-    """File integrity monitoring (Wazuh rule groups: syscheck)."""
     return {
         "timestamp": _ts(offset),
         "rule": {
@@ -162,7 +145,6 @@ def file_integrity_alert(
 
 
 def minimal_alert() -> Dict[str, Any]:
-    """Alert with only required fields (timestamp, rule, agent)."""
     return {
         "timestamp": _ts(0),
         "rule": {
@@ -179,7 +161,6 @@ def minimal_alert() -> Dict[str, Any]:
 
 
 def alert_with_no_groups_but_description_keywords() -> Dict[str, Any]:
-    """Alert with empty groups but classifiable via rule.description."""
     return {
         "timestamp": _ts(0),
         "rule": {
@@ -201,7 +182,6 @@ def alert_with_no_groups_but_description_keywords() -> Dict[str, Any]:
 
 
 def alert_with_data_status_only() -> Dict[str, Any]:
-    """Alert classifiable only via data.status field (no groups, ambiguous description)."""
     return {
         "timestamp": _ts(0),
         "rule": {
@@ -223,18 +203,13 @@ def alert_with_data_status_only() -> Dict[str, Any]:
     }
 
 
-# ---------------------------------------------------------------------------
-# Scenario builders
-# ---------------------------------------------------------------------------
-
-
 def brute_force_scenario(
     count: int = 7,
     interval_seconds: int = 30,
     src_ip: str = "192.168.1.100",
     user: str = "admin",
 ) -> List[Dict[str, Any]]:
-    """Generate *count* failed SSH logins from the same IP within a short window."""
+    """Generate failed login alerts from same IP."""
     return [
         ssh_auth_failure(offset=i * interval_seconds, src_ip=src_ip, user=user)
         for i in range(count)
@@ -247,7 +222,7 @@ def account_compromise_scenario(
     src_ip: str = "192.168.1.100",
     user: str = "admin",
 ) -> List[Dict[str, Any]]:
-    """Failures followed by a success from the same IP."""
+    """Generate failed logins followed by successful login."""
     alerts = [
         ssh_auth_failure(offset=i * interval_seconds, src_ip=src_ip, user=user)
         for i in range(failure_count)
@@ -262,7 +237,7 @@ def full_attack_scenario(
     src_ip: str = "192.168.1.100",
     user: str = "admin",
 ) -> List[Dict[str, Any]]:
-    """Failures → success → privilege escalation (full kill chain)."""
+    """Generate failed logins, success, and privilege escalation."""
     alerts = account_compromise_scenario(failure_count=failure_count, src_ip=src_ip, user=user)
     priv_offset = failure_count * 20 + 60
     alerts.append(sudo_privilege_escalation(offset=priv_offset, user=user))

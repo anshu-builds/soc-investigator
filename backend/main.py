@@ -384,22 +384,21 @@ async def dashboard_summary(
     )
 
 
-# ── Wazuh Integration ────────────────────────────────────────────────────────
+# Wazuh integration
 
 wazuh_logger = logging.getLogger("soc.wazuh")
 
-# In-memory LRU dedup cache (bounded at 10 000 entries)
 _DEDUP_MAX = 10_000
 _dedup_cache: OrderedDict[str, bool] = OrderedDict()
 
 
 def _is_duplicate(digest: str) -> bool:
-    """Return True if *digest* has been committed before."""
+    """Return True if digest has been committed before."""
     return digest in _dedup_cache
 
 
 def _record_dedup(digests: List[str]) -> None:
-    """Record digests into LRU cache only after successful commit."""
+    """Record digests into LRU cache after successful commit."""
     for digest in digests:
         _dedup_cache[digest] = True
         _dedup_cache.move_to_end(digest)
@@ -413,7 +412,7 @@ async def ingest_wazuh_alerts(
     x_wazuh_token: Optional[str] = Header(None),
     db: AsyncSession = Depends(get_db),
 ):
-    """Receive Wazuh alerts via webhook and process through the SOC pipeline."""
+    """Ingest Wazuh alerts and run detection/correlation pipeline."""
     from backend.services.wazuh_adapter import (
         WazuhIngestionRequest,
         WazuhIngestionResponse,
@@ -421,7 +420,7 @@ async def ingest_wazuh_alerts(
         normalize_wazuh_alerts,
     )
 
-    # --- authentication ---
+    # Authenticate webhook
     secret = settings.wazuh_webhook_secret
     if secret:
         if not x_wazuh_token or not hmac.compare_digest(x_wazuh_token, secret):
@@ -430,7 +429,7 @@ async def ingest_wazuh_alerts(
     else:
         wazuh_logger.warning("WAZUH_WEBHOOK_SECRET is not configured — webhook is unauthenticated")
 
-    # --- request size check (1 MB) ---
+    # Check request size limit (1 MB)
     content_length = request.headers.get("content-length")
     if content_length:
         try:
@@ -440,7 +439,7 @@ async def ingest_wazuh_alerts(
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid Content-Length header")
 
-    # --- parse and validate ---
+    # Validate payload
     try:
         body = await request.json()
     except Exception:
@@ -451,7 +450,7 @@ async def ingest_wazuh_alerts(
     except Exception as e:
         raise HTTPException(status_code=422, detail=f"Validation error: {e}")
 
-    # --- process alerts ---
+    # Deduplicate alerts
     duplicates = 0
     errors: List[str] = []
     fresh_alerts = []
