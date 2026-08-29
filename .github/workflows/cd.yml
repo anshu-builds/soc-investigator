@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-
   workflow_dispatch:
 
 permissions:
@@ -46,3 +45,37 @@ jobs:
           tags: |
             ghcr.io/${{ github.repository_owner }}/soc-investigator-frontend:latest
             ghcr.io/${{ github.repository_owner }}/soc-investigator-frontend:${{ github.sha }}
+
+  deploy:
+    name: Deploy to EC2
+    needs: docker-build-push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy application to EC2
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e
+
+            cd ~/soc-investigator-deploy
+
+            echo "Pulling latest backend image..."
+            docker pull ghcr.io/anshu-builds/soc-investigator-backend:latest
+
+            echo "Pulling latest frontend image..."
+            docker pull ghcr.io/anshu-builds/soc-investigator-frontend:latest
+
+            echo "Recreating application containers..."
+            docker compose up -d --no-deps backend frontend
+
+            echo "Restarting Nginx..."
+            docker compose up -d nginx
+
+            echo "Deployment completed."
+
+            echo "Running containers:"
+            docker ps
