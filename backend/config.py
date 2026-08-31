@@ -44,6 +44,14 @@ class Settings(BaseSettings):
 
     # Wazuh integration
     wazuh_webhook_secret: str = ""
+    wazuh_api_enabled: bool = False
+    wazuh_api_url: str = ""
+    wazuh_api_username: str = ""
+    wazuh_api_password: str = ""
+    wazuh_api_verify_ssl: bool = True
+    wazuh_poll_interval_seconds: int = 30
+    wazuh_api_request_timeout: int = 15
+    wazuh_api_initial_lookback_minutes: int = 60
 
     @property
     def cors_origins_list(self) -> List[str]:

@@ -37,19 +37,49 @@ from backend.services.log_service import parse_upload, run_pipeline
 from backend.services.report_service import generate_report
 from ai.investigation_chain import run_investigation_chain
 from ai.nlu import answer_question
+from backend.services.wazuh_client import WazuhClient
+from backend.services.wazuh_poller import WazuhPoller, WazuhPollResponse
 
 settings = get_settings()
+
+_wazuh_poller: Optional[WazuhPoller] = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global _wazuh_poller
     await create_all_tables()
     try:
         from rag.ingest.ingest_playbooks import ensure_playbooks_ingested
         ensure_playbooks_ingested()
     except Exception as e:
         logging.getLogger("soc.backend").warning("Startup playbook check skipped: %s", e)
+
+    if settings.wazuh_api_enabled:
+        try:
+            client = WazuhClient(
+                base_url=settings.wazuh_api_url,
+                username=settings.wazuh_api_username,
+                password=settings.wazuh_api_password,
+                verify_ssl=settings.wazuh_api_verify_ssl,
+                timeout=settings.wazuh_api_request_timeout,
+            )
+            _wazuh_poller = WazuhPoller(
+                client=client,
+                session_factory=AsyncSessionLocal,
+                poll_interval_seconds=settings.wazuh_poll_interval_seconds,
+                initial_lookback_minutes=settings.wazuh_api_initial_lookback_minutes,
+                is_duplicate_fn=_is_duplicate,
+                record_dedup_fn=_record_dedup,
+            )
+            await _wazuh_poller.start()
+        except Exception as e:
+            logging.getLogger("soc.backend").warning("Wazuh poller startup failed: %s", e)
+
     yield
+
+    if _wazuh_poller:
+        await _wazuh_poller.stop()
 
 
 app = FastAPI(
@@ -558,11 +588,73 @@ async def ingest_wazuh_alerts(
     )
 
 
+@app.post("/api/integrations/wazuh/poll", response_model=WazuhPollResponse, tags=["wazuh"])
+async def poll_wazuh_alerts():
+    """Trigger an on-demand poll cycle from the Wazuh REST API."""
+    global _wazuh_poller
+    current_settings = get_settings()
+    if _wazuh_poller is None:
+        if not current_settings.wazuh_api_url or not current_settings.wazuh_api_username or not current_settings.wazuh_api_password:
+            raise HTTPException(
+                status_code=400,
+                detail="Wazuh API is not configured (WAZUH_API_URL, WAZUH_API_USERNAME, WAZUH_API_PASSWORD required)",
+            )
+        client = WazuhClient(
+            base_url=current_settings.wazuh_api_url,
+            username=current_settings.wazuh_api_username,
+            password=current_settings.wazuh_api_password,
+            verify_ssl=current_settings.wazuh_api_verify_ssl,
+            timeout=current_settings.wazuh_api_request_timeout,
+        )
+        _wazuh_poller = WazuhPoller(
+            client=client,
+            session_factory=AsyncSessionLocal,
+            poll_interval_seconds=current_settings.wazuh_poll_interval_seconds,
+            initial_lookback_minutes=current_settings.wazuh_api_initial_lookback_minutes,
+            is_duplicate_fn=_is_duplicate,
+            record_dedup_fn=_record_dedup,
+        )
+
+    try:
+        result = await _wazuh_poller.poll_once()
+        return result
+    except HTTPException:
+        raise
+    except Exception:
+        wazuh_logger.exception("Manual Wazuh poll failed")
+        raise HTTPException(
+            status_code=502,
+            detail="Wazuh polling failed. Check server logs for details.",
+        )
+
+
 @app.get("/api/integrations/wazuh/status", tags=["wazuh"])
 async def wazuh_status():
-    """Health check for the Wazuh integration."""
+    """Health check and status for Wazuh webhook and API polling integrations."""
+    current_settings = get_settings()
+    poller_status = _wazuh_poller.get_status() if _wazuh_poller else {
+        "running": False,
+        "poll_interval_seconds": current_settings.wazuh_poll_interval_seconds,
+        "overlap_seconds": 30,
+        "watermark": None,
+        "last_attempted_poll": None,
+        "last_successful_poll": None,
+        "total_alerts_fetched": 0,
+        "total_alerts_processed": 0,
+        "total_duplicates": 0,
+        "consecutive_errors": 0,
+        "last_error": None,
+    }
+
     return {
         "status": "ready",
-        "authentication": "configured" if settings.wazuh_webhook_secret else "unconfigured",
+        "authentication": "configured" if current_settings.wazuh_webhook_secret else "unconfigured",
         "dedup_cache_size": len(_dedup_cache),
+        "api_polling": {
+            "enabled": current_settings.wazuh_api_enabled,
+            "configured": bool(current_settings.wazuh_api_url and current_settings.wazuh_api_username),
+            "api_url": current_settings.wazuh_api_url if current_settings.wazuh_api_url else None,
+            "verify_ssl": current_settings.wazuh_api_verify_ssl,
+            **poller_status,
+        },
     }
