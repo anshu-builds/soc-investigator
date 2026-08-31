@@ -65,7 +65,6 @@ async def test_generate_incident_summary_auto_loads_default_retriever(mock_get_r
     mock_get_retriever.return_value = mock_retriever
     mock_call_llm.return_value = "Summary text [EV-001]."
 
-    # Calling without passing rag_retriever
     summary = await generate_incident_summary(
         db=AsyncMock(),
         incident_id=uuid.uuid4(),

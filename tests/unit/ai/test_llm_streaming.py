@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import AsyncMock, patch, call
+from unittest.mock import AsyncMock, patch
 
 from ai.llm_client import GeminiAdapter, OpenAIAdapter, call_llm_stream
 
