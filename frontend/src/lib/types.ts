@@ -127,7 +127,7 @@ export interface ChatMessage {
   content: string
   evidence_ids?: string[]
   rag_chunks_used?: RagChunk[]
-  answer_type?: 'FACTUAL' | 'INFERENCE' | 'RECOMMENDATION'
+  answer_type?: 'FACTUAL' | 'INFERENCE' | 'RECOMMENDATION' | 'CANNOT_DETERMINE'
   ai_confidence?: number
   timestamp: string
 }
@@ -145,7 +145,7 @@ export interface ChatResponse {
   evidence_ids: string[]
   mitre_references: string[]
   rag_sources: string[]
-  answer_type: 'FACTUAL' | 'INFERENCE' | 'RECOMMENDATION'
+  answer_type: 'FACTUAL' | 'INFERENCE' | 'RECOMMENDATION' | 'CANNOT_DETERMINE'
   confidence: number
 }
 

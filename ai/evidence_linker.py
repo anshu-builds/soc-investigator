@@ -49,6 +49,25 @@ def classify_answer_type(llm_response: str) -> str:
     has_inference = any(kw in lower for kw in ["suggests", "likely", "could indicate", "appears to", "may be"])
     has_recommendation = any(kw in lower for kw in ["should", "recommend", "next step", "containment", "isolate"])
 
+    # Explicit statements of uncertainty or lack of evidence
+    uncertainty_phrases = [
+        "cannot determine",
+        "insufficient evidence",
+        "insufficient information",
+        "do not have enough information",
+        "not enough information",
+        "available evidence does not establish",
+        "cannot establish from the provided evidence",
+        "cannot establish from the available evidence",
+        "no evidence supports",
+        "no evidence to suggest",
+        "unable to determine",
+    ]
+    is_uncertain = any(phrase in lower for phrase in uncertainty_phrases)
+
+    if is_uncertain and not has_citations:
+        return "CANNOT_DETERMINE"
+
     if has_recommendation and not has_citations:
         return "RECOMMENDATION"
     elif has_inference and not has_citations:
