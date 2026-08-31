@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import uuid
 from typing import Any, Dict, List, Optional
 
@@ -14,6 +15,8 @@ from ai.evidence_linker import (
 )
 from ai.llm_client import call_llm
 from ai.prompt_templates import build_system_prompt, build_user_prompt
+
+logger = logging.getLogger("soc.ai")
 
 
 async def run_investigation_chain(
@@ -51,7 +54,7 @@ async def run_investigation_chain(
                 for c in rag_chunks
             )
         except Exception as e:
-            print(f"[RAG] Retrieval failed: {e}")
+            logger.debug("RAG retrieval failed: %s", e)
 
     chat_history_text = format_chat_history(chat_history)
     system_prompt = build_system_prompt(
@@ -68,7 +71,7 @@ async def run_investigation_chain(
     )
 
     if invalid_keys:
-        print(f"[AI] WARNING: LLM cited non-existent evidence keys: {invalid_keys}")
+        logger.warning("LLM cited non-existent evidence keys: %s", invalid_keys)
 
     mitre_refs = extract_mitre_references(cleaned_response)
     rag_sources = extract_rag_sources(rag_chunks)
