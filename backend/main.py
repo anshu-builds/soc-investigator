@@ -36,6 +36,7 @@ from backend.schemas import (
 from backend.services.log_service import parse_upload, run_pipeline
 from backend.services.report_service import generate_report
 from ai.investigation_chain import run_investigation_chain
+from ai.summary_generator import generate_incident_summary
 from ai.nlu import answer_question
 from backend.services.wazuh_client import WazuhClient
 from backend.services.wazuh_poller import WazuhPoller, WazuhPollResponse
@@ -394,11 +395,24 @@ async def create_report(
     body: ReportRequest,
     db: AsyncSession = Depends(get_db),
 ):
+    ai_summary = None
+    if body.include_ai_summary:
+        try:
+            from rag.retriever import get_retriever
+            retriever = get_retriever()
+        except Exception:
+            retriever = None
+        ai_summary = await generate_incident_summary(
+            db=db,
+            incident_id=incident_id,
+            rag_retriever=retriever,
+        )
+
     report = await generate_report(
         db=db,
         incident_id=incident_id,
         format=body.format,
-        ai_summary=None,
+        ai_summary=ai_summary,
     )
     await db.commit()
     return ReportCreateResponse(

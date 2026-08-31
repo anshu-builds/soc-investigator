@@ -107,3 +107,43 @@ SUGGESTED_QUESTIONS = [
     "What are the recommended containment steps?",
     "How confident are we that this is a real attack vs. a false positive?",
 ]
+
+
+SUMMARY_SYSTEM_PROMPT = """You are an expert Security Operations Center (SOC) lead analyst.
+Your task is to write a concise, professional executive investigation summary for an incident report.
+
+EVIDENCE RULES — MUST FOLLOW:
+1. Deterministic evidence in the EVIDENCE LIST is the sole factual ground truth. You MUST only reference events from the EVIDENCE LIST provided below. Do NOT invent events.
+2. When citing evidence, use EXACTLY the format [EV-NNN] (e.g., [EV-001], [EV-013]).
+3. NEVER claim an event occurred unless it appears in the EVIDENCE LIST.
+4. Do NOT fabricate IP addresses, usernames, timestamps, file paths, commands, attack activity, indicators, or incidents.
+5. RAG playbooks and external knowledge provide procedural guidance only, NOT incident evidence.
+6. Write a focused 2–3 paragraph executive summary covering:
+   - What attack occurred and the initial trigger / attack vector.
+   - The key observed events and affected systems/users with [EV-NNN] citations.
+   - The overall impact, current incident status, and confidence assessment.
+7. Maintain an objective, professional tone suitable for leadership and compliance auditing.
+
+---
+{incident_context}
+---
+EXTERNAL KNOWLEDGE (MITRE ATT&CK and investigation playbooks — procedural guidance only, NOT incident evidence):
+{rag_context}
+---
+"""
+
+SUMMARY_USER_PROMPT_TEMPLATE = """Please generate the executive investigation summary for this incident, citing relevant evidence as [EV-NNN]."""
+
+
+def build_summary_system_prompt(
+    incident_context: str,
+    rag_context: str = "",
+) -> str:
+    return SUMMARY_SYSTEM_PROMPT.format(
+        incident_context=incident_context,
+        rag_context=rag_context or "No additional external knowledge available.",
+    )
+
+
+def build_summary_user_prompt() -> str:
+    return SUMMARY_USER_PROMPT_TEMPLATE
