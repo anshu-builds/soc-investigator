@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ai.context_builder import build_context
+from ai.context_builder import build_context, format_chat_history
 from ai.evidence_linker import (
     classify_answer_type,
     extract_and_validate_citations,
@@ -21,7 +21,9 @@ async def run_investigation_chain(
     incident_id: uuid.UUID,
     user_question: str,
     rag_retriever=None,
+    chat_history: Optional[List[Any]] = None,
 ) -> Dict[str, Any]:
+    """Execute the evidence-grounded AI investigation pipeline."""
     context = await build_context(db, incident_id)
     incident_context = context["context_text"]
     evidence_map = context["evidence_map"]
@@ -51,7 +53,12 @@ async def run_investigation_chain(
         except Exception as e:
             print(f"[RAG] Retrieval failed: {e}")
 
-    system_prompt = build_system_prompt(incident_context, rag_context)
+    chat_history_text = format_chat_history(chat_history)
+    system_prompt = build_system_prompt(
+        incident_context=incident_context,
+        rag_context=rag_context,
+        chat_history_context=chat_history_text,
+    )
     user_prompt = build_user_prompt(user_question)
 
     raw_response = await call_llm(system_prompt, user_prompt)

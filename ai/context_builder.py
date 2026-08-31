@@ -118,3 +118,37 @@ def _format_context(
         )
 
     return "\n".join(lines)
+
+
+def format_chat_history(chat_history: Optional[List[Any]]) -> str:
+    """Format recent conversation history into a structured text block.
+
+    Treats history as conversational dialogue context, clearly distinguishing
+    user inquiries from assistant responses.
+    """
+    if not chat_history:
+        return ""
+
+    lines: List[str] = []
+    for msg in chat_history:
+        if isinstance(msg, dict):
+            role = str(msg.get("role", "unknown")).upper()
+            content = str(msg.get("content") or "").strip()
+        else:
+            role = str(getattr(msg, "role", "unknown")).upper()
+            content = str(getattr(msg, "content", "") or "").strip()
+
+        if not content:
+            continue
+
+        if role in ("USER", "HUMAN", "ANALYST"):
+            lines.append(f"Analyst: {content}")
+        elif role in ("ASSISTANT", "AI", "SYSTEM"):
+            lines.append(f"Assistant: {content}")
+        else:
+            lines.append(f"{role.capitalize()}: {content}")
+
+    return "\n\n".join(lines)
+
+
+_format_chat_history = format_chat_history

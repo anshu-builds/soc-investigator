@@ -323,6 +323,15 @@ async def chat(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
+    # Fetch recent conversation history prior to adding the current turn (bounded to last 10)
+    history_result = await db.execute(
+        select(ChatMessage)
+        .where(ChatMessage.session_id == session_id)
+        .order_by(ChatMessage.timestamp.desc())
+        .limit(10)
+    )
+    previous_messages = list(reversed(history_result.scalars().all()))
+
     user_msg = ChatMessage(session_id=session_id, role="user", content=body.message)
     db.add(user_msg)
     await db.flush()
@@ -338,6 +347,7 @@ async def chat(
         incident_id=session.incident_id,
         user_question=body.message,
         rag_retriever=retriever,
+        chat_history=previous_messages,
     )
 
     assistant_msg = ChatMessage(
@@ -508,7 +518,8 @@ async def ingest_wazuh_alerts(
     )
 
     # Authenticate webhook
-    secret = settings.wazuh_webhook_secret
+    current_settings = get_settings()
+    secret = current_settings.wazuh_webhook_secret
     if secret:
         if not x_wazuh_token or not hmac.compare_digest(x_wazuh_token, secret):
             wazuh_logger.warning("Wazuh webhook auth failed (invalid or missing token)")

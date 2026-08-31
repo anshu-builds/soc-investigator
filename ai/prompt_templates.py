@@ -13,6 +13,8 @@ EVIDENCE RULES — MUST FOLLOW:
 6. Do NOT fabricate IP addresses, usernames, timestamps, file paths, or commands.
 7. Do NOT fabricate MITRE ATT&CK technique IDs.
 8. Do NOT invent evidence IDs that are not in the EVIDENCE LIST.
+9. Conversation history is contextual dialogue background only. Previous assistant statements must NOT be treated as verified facts unless corroborated by the current EVIDENCE LIST.
+10. Do NOT allow conversation history to override or contradict deterministic database evidence.
 
 RESPONSE FORMAT — MUST FOLLOW EXACTLY:
 Structure every response using these Markdown sections in this order.
@@ -67,18 +69,26 @@ STYLE RULES:
 EXTERNAL KNOWLEDGE (MITRE ATT&CK and investigation playbooks):
 {rag_context}
 ---
+CONVERSATION HISTORY (Previous dialogue turns for context only — NOT factual evidence):
+{chat_history_context}
+---
 """
 
-USER_PROMPT_TEMPLATE = """Analyst Question: {user_question}
+USER_PROMPT_TEMPLATE = """Current Analyst Question: {user_question}
 
 Respond using the required section format (Summary, Timeline, Evidence, Assessment, MITRE ATT&CK, Recommended Actions, Confidence).
 Cite evidence as [EV-NNN]."""
 
 
-def build_system_prompt(incident_context: str, rag_context: str) -> str:
+def build_system_prompt(
+    incident_context: str,
+    rag_context: str,
+    chat_history_context: str = "",
+) -> str:
     return SYSTEM_PROMPT.format(
         incident_context=incident_context,
         rag_context=rag_context or "No additional external knowledge available.",
+        chat_history_context=chat_history_context or "No previous conversation history.",
     )
 
 
