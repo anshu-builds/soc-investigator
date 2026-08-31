@@ -29,12 +29,14 @@ from backend.schemas import (
     ChatRequest, ChatResponse, DashboardSummary, EvidenceListResponse,
     EvidenceOut, IncidentDetail, IncidentListResponse, IncidentStatusUpdate,
     IncidentSummary, LogUploadResponse, LoginRequest, MessageListResponse,
+    NLQueryRequest, NLQueryResponse,
     ReportCreateResponse, ReportOut, ReportRequest, SecurityEventListResponse,
     SecurityEventOut, SessionCreateResponse, TokenResponse,
 )
 from backend.services.log_service import parse_upload, run_pipeline
 from backend.services.report_service import generate_report
 from ai.investigation_chain import run_investigation_chain
+from ai.nlu import answer_question
 
 settings = get_settings()
 
@@ -69,6 +71,56 @@ app.add_middleware(
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+logger = logging.getLogger("soc.backend")
+
+
+@app.post("/api/nlu/query", response_model=NLQueryResponse, tags=["investigation"])
+async def nl_query(
+    body: NLQueryRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Natural-language investigation query. Deterministic entity extraction +
+    intent classification + SQL translation — no LLM call on this path, so
+    results are exact and auditable.
+    """
+    try:
+        response = await answer_question(db, body.question)
+    except Exception:
+        logger.exception("NLU query processing error")
+        return NLQueryResponse(
+            answer="An error occurred while processing your query. Please try rephrasing.",
+            needs_clarification=False,
+            result_count=0,
+        )
+
+    resolved_filters = None
+    resolved_intent = None
+    if response.query_spec is not None:
+        resolved_intent = response.query_spec.intent.value
+        e = response.query_spec.entities
+        resolved_filters = {
+            "ips": e.ips,
+            "usernames": e.usernames,
+            "hostnames": e.hostnames,
+            "event_types": e.event_types,
+            "attack_types": e.attack_types,
+            "severities": e.severities,
+            "mitre_techniques": e.mitre_techniques,
+            "time_start": e.time_start.isoformat() if e.time_start else None,
+            "time_end": e.time_end.isoformat() if e.time_end else None,
+        }
+
+    return NLQueryResponse(
+        answer=response.answer,
+        needs_clarification=response.needs_clarification,
+        clarification_question=response.clarification_question,
+        clarification_options=response.clarification_options,
+        result_count=response.result_count,
+        resolved_intent=resolved_intent,
+        resolved_filters=resolved_filters,
+    )
 
 
 @app.post("/api/logs/upload", response_model=LogUploadResponse, tags=["logs"])

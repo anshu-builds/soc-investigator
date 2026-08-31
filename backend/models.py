@@ -5,10 +5,41 @@ from datetime import datetime, timezone
 
 from sqlalchemy import (
     ARRAY, Boolean, Column, DateTime, Float, ForeignKey,
-    Integer, String, Text, UniqueConstraint,
+    Integer, JSON, String, Text, TypeDecorator, UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import JSONB as PG_JSONB, UUID as PG_UUID
 from sqlalchemy.orm import relationship
+import uuid as _uuid_mod
+
+
+class UUID(TypeDecorator):
+    """Portable UUID type: native on PostgreSQL, CHAR(36) on SQLite."""
+    impl = String(36)
+    cache_ok = True
+
+    def __init__(self, as_uuid: bool = True, *args, **kwargs):
+        self.as_uuid = as_uuid
+        super().__init__(*args, **kwargs)
+
+    def load_dialect_impl(self, dialect):
+        if dialect.name == "postgresql":
+            return dialect.type_descriptor(PG_UUID(as_uuid=self.as_uuid))
+        return dialect.type_descriptor(String(36))
+
+    def process_bind_param(self, value, dialect):
+        if value is None or dialect.name == "postgresql":
+            return value
+        return str(value)
+
+    def process_result_value(self, value, dialect):
+        if value is None or dialect.name == "postgresql":
+            return value
+        return _uuid_mod.UUID(value) if self.as_uuid else value
+
+
+def JSONB():
+    """Portable JSONB type: native JSONB on PostgreSQL, JSON on SQLite."""
+    return PG_JSONB().with_variant(JSON(), "sqlite")
 
 from backend.database import Base
 
@@ -51,7 +82,7 @@ class SecurityEvent(Base):
     ingested_at      = Column(DateTime(timezone=True), nullable=False, default=_now)
     is_flagged       = Column(Boolean, nullable=False, default=False)
     incident_id      = Column(UUID(as_uuid=True), ForeignKey("incidents.id", ondelete="SET NULL"), nullable=True, index=True)
-    extra_metadata   = Column(JSONB, nullable=True)
+    extra_metadata   = Column(JSONB(), nullable=True)
 
     incident         = relationship("Incident", back_populates="events", foreign_keys=[incident_id])
     evidence_links   = relationship("Evidence", back_populates="event")
@@ -73,7 +104,7 @@ class Incident(Base):
     first_seen        = Column(DateTime(timezone=True), nullable=False)
     last_seen         = Column(DateTime(timezone=True), nullable=False)
     event_count       = Column(Integer, nullable=False, default=0)
-    attack_hypothesis = Column(JSONB, nullable=True)
+    attack_hypothesis = Column(JSONB(), nullable=True)
     created_at        = Column(DateTime(timezone=True), nullable=False, default=_now)
     updated_at        = Column(DateTime(timezone=True), nullable=False, default=_now, onupdate=_now)
 
@@ -136,8 +167,8 @@ class ChatMessage(Base):
     session_id      = Column(UUID(as_uuid=True), ForeignKey("investigation_sessions.id", ondelete="CASCADE"), nullable=False, index=True)
     role            = Column(String(20), nullable=False)
     content         = Column(Text, nullable=False)
-    evidence_ids    = Column(JSONB, nullable=True)
-    rag_chunks_used = Column(JSONB, nullable=True)
+    evidence_ids    = Column(JSONB(), nullable=True)
+    rag_chunks_used = Column(JSONB(), nullable=True)
     answer_type     = Column(String(20), nullable=True)
     ai_confidence   = Column(Float, nullable=True)
     timestamp       = Column(DateTime(timezone=True), nullable=False, default=_now)
@@ -155,6 +186,6 @@ class Report(Base):
     content              = Column(Text, nullable=False)
     file_path            = Column(String(500), nullable=True)
     ai_summary           = Column(Text, nullable=True)
-    recommended_actions  = Column(JSONB, nullable=True)
+    recommended_actions  = Column(JSONB(), nullable=True)
 
     incident             = relationship("Incident", back_populates="reports")

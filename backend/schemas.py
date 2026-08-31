@@ -193,3 +193,19 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     expires_in: int
+
+
+class NLQueryRequest(BaseModel):
+    question: str = Field(..., min_length=1, max_length=500)
+
+
+class NLQueryResponse(BaseModel):
+    answer: str
+    needs_clarification: bool
+    clarification_question: Optional[str] = None
+    clarification_options: List[str] = []
+    result_count: int
+    # Audit trail: exactly what was searched for, so an analyst (or auditor)
+    # can verify the system didn't silently misinterpret the question.
+    resolved_intent: Optional[str] = None
+    resolved_filters: Optional[Dict[str, Any]] = None
