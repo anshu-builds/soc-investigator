@@ -1,0 +1,147 @@
+name: CD
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  docker-build-push:
+    name: Build and Push Docker Images
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: backend/Dockerfile
+          push: true
+          no-cache: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/soc-investigator-backend:latest
+            ghcr.io/${{ github.repository_owner }}/soc-investigator-backend:${{ github.sha }}
+
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/soc-investigator-frontend:latest
+            ghcr.io/${{ github.repository_owner }}/soc-investigator-frontend:${{ github.sha }}
+
+  deploy:
+    name: Deploy to EC2
+    needs: docker-build-push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy application to EC2
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+
+          script: |
+            set -e
+
+            cd ~/soc-investigator-deploy
+
+            echo "=========================================="
+            echo "Deploying commit: ${{ github.sha }}"
+            echo "=========================================="
+
+            echo "Docker disk usage before cleanup:"
+            docker system df || true
+
+            echo "Removing stopped containers and unused images/build cache (preserving volumes)..."
+            docker container prune -f || true
+            docker image prune -af || true
+            docker builder prune -af || true
+
+            echo "Docker disk usage after cleanup:"
+            docker system df || true
+
+            if ! docker info >/dev/null 2>&1; then
+              echo "Docker daemon is unavailable on the EC2 host."
+              exit 1
+            fi
+
+            echo "Checking available disk space on the Docker host:"
+            df -h /var/lib/docker || df -h /
+
+            AVAILABLE_BYTES=$(df -PB1 /var/lib/docker 2>/dev/null | awk 'NR==2 {print $4}')
+            if [ -z "$AVAILABLE_BYTES" ]; then
+              AVAILABLE_BYTES=$(df -PB1 / 2>/dev/null | awk 'NR==2 {print $4}')
+            fi
+
+            if [ -n "$AVAILABLE_BYTES" ] && [ "$AVAILABLE_BYTES" -lt $((2 * 1024 * 1024 * 1024)) ]; then
+              echo "Insufficient free space remains after cleanup (< 2 GiB). Aborting before image pull to avoid a late failure."
+              exit 1
+            fi
+
+            echo "Pulling backend image for this commit..."
+            docker pull ghcr.io/${{ github.repository_owner }}/soc-investigator-backend:${{ github.sha }}
+
+            echo "Pulling frontend image for this commit..."
+            docker pull ghcr.io/${{ github.repository_owner }}/soc-investigator-frontend:${{ github.sha }}
+
+            echo "Tagging backend image as latest..."
+            docker tag \
+              ghcr.io/${{ github.repository_owner }}/soc-investigator-backend:${{ github.sha }} \
+              ghcr.io/${{ github.repository_owner }}/soc-investigator-backend:latest
+
+            echo "Tagging frontend image as latest..."
+            docker tag \
+              ghcr.io/${{ github.repository_owner }}/soc-investigator-frontend:${{ github.sha }} \
+              ghcr.io/${{ github.repository_owner }}/soc-investigator-frontend:latest
+
+            echo "Stopping old backend and frontend containers..."
+            docker compose stop backend frontend || true
+
+            echo "Removing old backend and frontend containers..."
+            docker compose rm -f backend frontend || true
+
+            echo "Starting backend and frontend with new images..."
+            docker compose up -d --no-deps backend frontend
+
+            echo "Restarting Nginx..."
+            docker compose up -d nginx
+
+            echo "Waiting for containers to start..."
+            sleep 10
+
+            echo "=========================================="
+            echo "Deployment completed"
+            echo "=========================================="
+
+            echo "Running containers:"
+            docker ps
+
+            echo "=========================================="
+            echo "Backend image:"
+            echo "=========================================="
+            docker inspect soc_backend --format '{{.Image}}'
+
+            echo "=========================================="
+            echo "Frontend image:"
+            echo "=========================================="
+            docker inspect soc_frontend --format '{{.Image}}'

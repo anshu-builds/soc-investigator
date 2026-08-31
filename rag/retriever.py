@@ -31,6 +31,10 @@ class VectorStore:
         )
         return self._collection
 
+    def count(self) -> int:
+        col = self.get_or_create_collection()
+        return col.count()
+
     def upsert(self, documents: List[str], metadatas: List[Dict], ids: List[str]) -> None:
         col = self.get_or_create_collection()
         col.upsert(documents=documents, metadatas=metadatas, ids=ids)

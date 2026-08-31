@@ -8,7 +8,7 @@ import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -55,8 +55,13 @@ async def run_pipeline(
     db: AsyncSession,
     raw_rows: List[Dict[str, Any]],
     source_file: str,
+    *,
+    _pre_normalized: Optional[List[NormalizedEvent]] = None,
 ) -> Tuple[int, int, int]:
-    normalized: List[NormalizedEvent] = normalize_batch(raw_rows, source_file)
+    normalized: List[NormalizedEvent] = (
+        _pre_normalized if _pre_normalized is not None
+        else normalize_batch(raw_rows, source_file)
+    )
     if not normalized:
         return 0, 0, 0
 

@@ -2,6 +2,7 @@ fastapi==0.111.0
 uvicorn[standard]==0.30.1
 sqlalchemy[asyncio]==2.0.31
 asyncpg==0.29.0
+aiosqlite==0.20.0
 alembic==1.13.2
 pydantic==2.8.2
 pydantic-settings==2.3.4
@@ -10,7 +11,8 @@ python-multipart==0.0.9
 jinja2==3.1.4
 chromadb==0.5.3
 sentence-transformers==3.0.1
-google-generativeai==0.7.2
+google-genai
 openai==1.37.0
 python-dotenv==1.0.1
 httpx==0.27.0
+sarvamai

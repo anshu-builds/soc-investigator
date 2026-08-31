@@ -1,13 +1,17 @@
 from __future__ import annotations
 
+import base64
+import hmac
+import logging
 import sys
 import time
 import uuid
+from collections import OrderedDict
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import List, Optional
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, Request, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from sqlalchemy import func, select
@@ -26,20 +30,58 @@ from backend.schemas import (
     ChatRequest, ChatResponse, DashboardSummary, EvidenceListResponse,
     EvidenceOut, IncidentDetail, IncidentListResponse, IncidentStatusUpdate,
     IncidentSummary, LogUploadResponse, LoginRequest, MessageListResponse,
+    NLQueryRequest, NLQueryResponse,
     ReportCreateResponse, ReportOut, ReportRequest, SecurityEventListResponse,
-    SecurityEventOut, SessionCreateResponse, TokenResponse,
+    SecurityEventOut, SessionCreateResponse, TokenResponse, TTSResponse,
 )
 from backend.services.log_service import parse_upload, run_pipeline
+from backend.services.sarvam_tts import SarvamTTSError, synthesize
 from backend.services.report_service import generate_report
 from ai.investigation_chain import run_investigation_chain
+from ai.nlu import answer_question
+from backend.services.wazuh_client import WazuhClient
+from backend.services.wazuh_poller import WazuhPoller, WazuhPollResponse
 
 settings = get_settings()
+
+_wazuh_poller: Optional[WazuhPoller] = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global _wazuh_poller
     await create_all_tables()
+    try:
+        from rag.ingest.ingest_playbooks import ensure_playbooks_ingested
+        ensure_playbooks_ingested()
+    except Exception as e:
+        logging.getLogger("soc.backend").warning("Startup playbook check skipped: %s", e)
+
+    if settings.wazuh_api_enabled:
+        try:
+            client = WazuhClient(
+                base_url=settings.wazuh_api_url,
+                username=settings.wazuh_api_username,
+                password=settings.wazuh_api_password,
+                verify_ssl=settings.wazuh_api_verify_ssl,
+                timeout=settings.wazuh_api_request_timeout,
+            )
+            _wazuh_poller = WazuhPoller(
+                client=client,
+                session_factory=AsyncSessionLocal,
+                poll_interval_seconds=settings.wazuh_poll_interval_seconds,
+                initial_lookback_minutes=settings.wazuh_api_initial_lookback_minutes,
+                is_duplicate_fn=_is_duplicate,
+                record_dedup_fn=_record_dedup,
+            )
+            await _wazuh_poller.start()
+        except Exception as e:
+            logging.getLogger("soc.backend").warning("Wazuh poller startup failed: %s", e)
+
     yield
+
+    if _wazuh_poller:
+        await _wazuh_poller.stop()
 
 
 app = FastAPI(
@@ -61,6 +103,56 @@ app.add_middleware(
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+logger = logging.getLogger("soc.backend")
+
+
+@app.post("/api/nlu/query", response_model=NLQueryResponse, tags=["investigation"])
+async def nl_query(
+    body: NLQueryRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Natural-language investigation query. Deterministic entity extraction +
+    intent classification + SQL translation — no LLM call on this path, so
+    results are exact and auditable.
+    """
+    try:
+        response = await answer_question(db, body.question)
+    except Exception:
+        logger.exception("NLU query processing error")
+        return NLQueryResponse(
+            answer="An error occurred while processing your query. Please try rephrasing.",
+            needs_clarification=False,
+            result_count=0,
+        )
+
+    resolved_filters = None
+    resolved_intent = None
+    if response.query_spec is not None:
+        resolved_intent = response.query_spec.intent.value
+        e = response.query_spec.entities
+        resolved_filters = {
+            "ips": e.ips,
+            "usernames": e.usernames,
+            "hostnames": e.hostnames,
+            "event_types": e.event_types,
+            "attack_types": e.attack_types,
+            "severities": e.severities,
+            "mitre_techniques": e.mitre_techniques,
+            "time_start": e.time_start.isoformat() if e.time_start else None,
+            "time_end": e.time_end.isoformat() if e.time_end else None,
+        }
+
+    return NLQueryResponse(
+        answer=response.answer,
+        needs_clarification=response.needs_clarification,
+        clarification_question=response.clarification_question,
+        clarification_options=response.clarification_options,
+        result_count=response.result_count,
+        resolved_intent=resolved_intent,
+        resolved_filters=resolved_filters,
+    )
 
 
 @app.post("/api/logs/upload", response_model=LogUploadResponse, tags=["logs"])
@@ -288,6 +380,51 @@ async def get_messages(
     return MessageListResponse(session_id=session_id, messages=messages)
 
 
+@app.post("/api/messages/{message_id}/tts", response_model=TTSResponse, tags=["investigation"])
+async def message_tts(
+    message_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """Synthesize speech only for an existing persisted assistant message.
+
+    The client supplies only the message ID; the backend loads the stored
+    assistant response, sanitizes its Markdown, chunks it to Sarvam's REST
+    limit, and returns ordered audio clips. A provider failure affects only
+    audio generation and never the already-rendered investigation answer.
+    """
+    if not settings.sarvam_tts_enabled:
+        raise HTTPException(
+            status_code=403,
+            detail="Text-to-speech is not enabled for this deployment.",
+        )
+
+    result = await db.execute(select(ChatMessage).where(ChatMessage.id == message_id))
+    message = result.scalar_one_or_none()
+    if not message:
+        raise HTTPException(status_code=404, detail="Message not found")
+    if message.role != "assistant":
+        raise HTTPException(
+            status_code=400,
+            detail="Only assistant messages can be converted to speech.",
+        )
+
+    try:
+        clips = synthesize(
+            message.content,
+            language=settings.sarvam_tts_language,
+            speaker=settings.sarvam_tts_speaker,
+            api_key=settings.sarvam_api_key,
+        )
+    except SarvamTTSError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return TTSResponse(
+        audio_clips_base64=[base64.b64encode(c.audio_bytes).decode("ascii") for c in clips],
+        content_type="audio/wav",
+        chunk_count=len(clips),
+    )
+
+
 @app.post("/api/incidents/{incident_id}/report", response_model=ReportCreateResponse, tags=["reports"])
 async def create_report(
     incident_id: uuid.UUID,
@@ -379,3 +516,192 @@ async def dashboard_summary(
         severity_distribution=severity_counts,
         recent_incidents=recent,
     )
+
+
+# Wazuh integration
+
+wazuh_logger = logging.getLogger("soc.wazuh")
+
+_DEDUP_MAX = 10_000
+_dedup_cache: OrderedDict[str, bool] = OrderedDict()
+
+
+def _is_duplicate(digest: str) -> bool:
+    """Return True if digest has been committed before."""
+    return digest in _dedup_cache
+
+
+def _record_dedup(digests: List[str]) -> None:
+    """Record digests into LRU cache after successful commit."""
+    for digest in digests:
+        _dedup_cache[digest] = True
+        _dedup_cache.move_to_end(digest)
+        while len(_dedup_cache) > _DEDUP_MAX:
+            _dedup_cache.popitem(last=False)
+
+
+@app.post("/api/integrations/wazuh/alerts", tags=["wazuh"])
+async def ingest_wazuh_alerts(
+    request: Request,
+    x_wazuh_token: Optional[str] = Header(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Ingest Wazuh alerts and run detection/correlation pipeline."""
+    from backend.services.wazuh_adapter import (
+        WazuhIngestionRequest,
+        WazuhIngestionResponse,
+        compute_dedup_hash,
+        normalize_wazuh_alerts,
+    )
+
+    # Authenticate webhook
+    secret = settings.wazuh_webhook_secret
+    if secret:
+        if not x_wazuh_token or not hmac.compare_digest(x_wazuh_token, secret):
+            wazuh_logger.warning("Wazuh webhook auth failed (invalid or missing token)")
+            raise HTTPException(status_code=401, detail="Invalid or missing X-Wazuh-Token")
+    else:
+        wazuh_logger.warning("WAZUH_WEBHOOK_SECRET is not configured — webhook is unauthenticated")
+
+    # Check request size limit (1 MB)
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            cl_int = int(content_length)
+            if cl_int > 1_048_576:
+                raise HTTPException(status_code=413, detail="Payload exceeds 1 MB limit")
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid Content-Length header")
+
+    # Validate payload
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=422, detail="Invalid JSON payload")
+
+    try:
+        payload = WazuhIngestionRequest.model_validate(body)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"Validation error: {e}")
+
+    # Deduplicate alerts
+    duplicates = 0
+    errors: List[str] = []
+    fresh_alerts = []
+    fresh_digests = []
+
+    for alert in payload.alerts:
+        digest = compute_dedup_hash(alert)
+        if _is_duplicate(digest):
+            duplicates += 1
+            continue
+        fresh_alerts.append(alert)
+        fresh_digests.append(digest)
+
+    if not fresh_alerts:
+        return WazuhIngestionResponse(
+            received=len(payload.alerts),
+            processed=0,
+            duplicates=duplicates,
+        )
+
+    try:
+        normalized = normalize_wazuh_alerts(fresh_alerts)
+        events_parsed, events_flagged, incidents_created = await run_pipeline(
+            db, [], "", _pre_normalized=normalized
+        )
+        await db.commit()
+        # Mark as processed only after successful database commit
+        _record_dedup(fresh_digests)
+    except Exception:
+        await db.rollback()
+        wazuh_logger.exception("Wazuh pipeline processing error")
+        raise HTTPException(status_code=500, detail="Internal error processing security alerts")
+
+    wazuh_logger.info(
+        "Wazuh ingestion: received=%d processed=%d duplicates=%d flagged=%d incidents=%d",
+        len(payload.alerts),
+        len(fresh_alerts),
+        duplicates,
+        events_flagged,
+        incidents_created,
+    )
+
+    return WazuhIngestionResponse(
+        received=len(payload.alerts),
+        processed=len(fresh_alerts),
+        duplicates=duplicates,
+        errors=errors,
+    )
+
+
+@app.post("/api/integrations/wazuh/poll", response_model=WazuhPollResponse, tags=["wazuh"])
+async def poll_wazuh_alerts():
+    """Trigger an on-demand poll cycle from the Wazuh REST API."""
+    global _wazuh_poller
+    current_settings = get_settings()
+    if _wazuh_poller is None:
+        if not current_settings.wazuh_api_url or not current_settings.wazuh_api_username or not current_settings.wazuh_api_password:
+            raise HTTPException(
+                status_code=400,
+                detail="Wazuh API is not configured (WAZUH_API_URL, WAZUH_API_USERNAME, WAZUH_API_PASSWORD required)",
+            )
+        client = WazuhClient(
+            base_url=current_settings.wazuh_api_url,
+            username=current_settings.wazuh_api_username,
+            password=current_settings.wazuh_api_password,
+            verify_ssl=current_settings.wazuh_api_verify_ssl,
+            timeout=current_settings.wazuh_api_request_timeout,
+        )
+        _wazuh_poller = WazuhPoller(
+            client=client,
+            session_factory=AsyncSessionLocal,
+            poll_interval_seconds=current_settings.wazuh_poll_interval_seconds,
+            initial_lookback_minutes=current_settings.wazuh_api_initial_lookback_minutes,
+            is_duplicate_fn=_is_duplicate,
+            record_dedup_fn=_record_dedup,
+        )
+
+    try:
+        result = await _wazuh_poller.poll_once()
+        return result
+    except HTTPException:
+        raise
+    except Exception:
+        wazuh_logger.exception("Manual Wazuh poll failed")
+        raise HTTPException(
+            status_code=502,
+            detail="Wazuh polling failed. Check server logs for details.",
+        )
+
+
+@app.get("/api/integrations/wazuh/status", tags=["wazuh"])
+async def wazuh_status():
+    """Health check and status for Wazuh webhook and API polling integrations."""
+    current_settings = get_settings()
+    poller_status = _wazuh_poller.get_status() if _wazuh_poller else {
+        "running": False,
+        "poll_interval_seconds": current_settings.wazuh_poll_interval_seconds,
+        "overlap_seconds": 30,
+        "watermark": None,
+        "last_attempted_poll": None,
+        "last_successful_poll": None,
+        "total_alerts_fetched": 0,
+        "total_alerts_processed": 0,
+        "total_duplicates": 0,
+        "consecutive_errors": 0,
+        "last_error": None,
+    }
+
+    return {
+        "status": "ready",
+        "authentication": "configured" if current_settings.wazuh_webhook_secret else "unconfigured",
+        "dedup_cache_size": len(_dedup_cache),
+        "api_polling": {
+            "enabled": current_settings.wazuh_api_enabled,
+            "configured": bool(current_settings.wazuh_api_url and current_settings.wazuh_api_username),
+            "api_url": current_settings.wazuh_api_url if current_settings.wazuh_api_url else None,
+            "verify_ssl": current_settings.wazuh_api_verify_ssl,
+            **poller_status,
+        },
+    }

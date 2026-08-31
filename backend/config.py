@@ -42,6 +42,23 @@ class Settings(BaseSettings):
     seed_admin_email: str = "analyst@demo.com"
     seed_admin_password: str = "demo1234"
 
+    # Wazuh integration
+    wazuh_webhook_secret: str = ""
+    wazuh_api_enabled: bool = False
+    wazuh_api_url: str = ""
+    wazuh_api_username: str = ""
+    wazuh_api_password: str = ""
+    wazuh_api_verify_ssl: bool = True
+    wazuh_poll_interval_seconds: int = 30
+    wazuh_api_request_timeout: int = 15
+    wazuh_api_initial_lookback_minutes: int = 60
+
+    # Sarvam TTS (disabled by default; explicit deployment-level opt-in)
+    sarvam_api_key: str = ""
+    sarvam_tts_enabled: bool = False
+    sarvam_tts_language: str = "en-IN"
+    sarvam_tts_speaker: str = "shubh"
+
     @property
     def cors_origins_list(self) -> List[str]:
         return [o.strip() for o in self.cors_origins.split(",")]

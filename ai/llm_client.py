@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -12,36 +11,62 @@ settings = get_settings()
 
 
 async def call_llm(system_prompt: str, user_prompt: str) -> str:
-    if settings.llm_provider.lower() == "gemini":
+    provider = settings.llm_provider.lower()
+
+    if provider == "gemini":
         try:
             return await _call_gemini(system_prompt, user_prompt)
         except Exception as e:
-            print(f"[LLM] Gemini failed ({e}), falling back to OpenAI...")
-            return await _call_openai(system_prompt, user_prompt)
-    else:
-        try:
-            return await _call_openai(system_prompt, user_prompt)
-        except Exception as e:
-            print(f"[LLM] OpenAI failed ({e}), falling back to Gemini...")
+            print(f"[LLM] Gemini failed: {e}")
+
+            if settings.openai_api_key:
+                print("[LLM] Falling back to OpenAI...")
+                return await _call_openai(system_prompt, user_prompt)
+
+            raise
+
+    try:
+        return await _call_openai(system_prompt, user_prompt)
+    except Exception as e:
+        print(f"[LLM] OpenAI failed: {e}")
+
+        if settings.gemini_api_key:
+            print("[LLM] Falling back to Gemini...")
             return await _call_gemini(system_prompt, user_prompt)
+
+        raise
 
 
 async def _call_gemini(system_prompt: str, user_prompt: str) -> str:
-    import google.generativeai as genai
+    from google import genai
+    from google.genai import types
 
-    genai.configure(api_key=settings.gemini_api_key)
-    model = genai.GenerativeModel(
-        model_name=settings.gemini_model,
-        system_instruction=system_prompt,
+    client = genai.Client(api_key=settings.gemini_api_key)
+
+    response = await client.aio.models.generate_content(
+        model=settings.gemini_model,
+        contents=user_prompt,
+        config=types.GenerateContentConfig(
+            system_instruction=system_prompt,
+            temperature=0.2,
+            max_output_tokens=3000,
+        ),
     )
-    response = model.generate_content(user_prompt)
+
+    if not response.text:
+        raise RuntimeError("Gemini returned an empty response")
+
     return response.text
 
 
 async def _call_openai(system_prompt: str, user_prompt: str) -> str:
     from openai import AsyncOpenAI
 
+    if not settings.openai_api_key:
+        raise RuntimeError("OpenAI API key is not configured")
+
     client = AsyncOpenAI(api_key=settings.openai_api_key)
+
     response = await client.chat.completions.create(
         model=settings.openai_model,
         messages=[
@@ -51,4 +76,5 @@ async def _call_openai(system_prompt: str, user_prompt: str) -> str:
         temperature=0.2,
         max_tokens=1500,
     )
+
     return response.choices[0].message.content or ""

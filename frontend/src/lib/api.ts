@@ -12,7 +12,7 @@ import type {
   SessionCreateResponse,
 } from './types'
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || ''
 
 function getToken(): string {
   if (typeof window === 'undefined') return ''
@@ -89,6 +89,18 @@ export async function sendMessage(sessionId: string, message: string): Promise<C
 
 export async function getMessages(sessionId: string): Promise<MessageListResponse> {
   return request<MessageListResponse>(`/api/sessions/${sessionId}/messages`)
+}
+
+export interface TTSResponse {
+  audio_clips_base64: string[]
+  content_type: string
+  chunk_count: number
+}
+
+export async function getMessageAudio(messageId: string): Promise<TTSResponse> {
+  return request<TTSResponse>(`/api/messages/${messageId}/tts`, {
+    method: 'POST',
+  })
 }
 
 export async function uploadLogs(file: File, sourceName?: string): Promise<LogUploadResponse> {
