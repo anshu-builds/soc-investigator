@@ -373,6 +373,7 @@ class TestLLMGlobalConcurrencySemaphore:
     async def test_llm_concurrency_released_on_exception(self, monkeypatch):
         monkeypatch.setenv("MAX_CONCURRENT_LLM_REQUESTS", "1")
         monkeypatch.setenv("LLM_PROVIDER", "gemini")
+        monkeypatch.setenv("OPENAI_API_KEY", "test-openai-key")
         get_settings.cache_clear()
         reset_llm_semaphore()
 
