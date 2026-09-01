@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ai.context_builder import build_context
 from ai.evidence_linker import extract_and_validate_citations
 from ai.llm_client import call_llm
+from ai.prompt_sanitizer import sanitize_rag_query, serialize_procedural_guidance
 from ai.prompt_templates import build_summary_system_prompt, build_summary_user_prompt
 
 logger = logging.getLogger("soc.ai")
@@ -46,13 +47,10 @@ async def generate_incident_summary(
         if rag_retriever is not None:
             try:
                 technique_ids = [t.technique_id for t in context.get("techniques", [])]
-                query = f"{incident.title} {incident.attack_type} {' '.join(technique_ids)}"
+                raw_query = f"{getattr(incident, 'title', '')} {getattr(incident, 'attack_type', '')} {' '.join(technique_ids)}"
+                query = sanitize_rag_query(raw_query)
                 rag_chunks = await rag_retriever.retrieve(query, top_k=2)
-                rag_context = "\n\n".join(
-                    f"[{c.get('title', 'Reference')}]\n{c.get('text', '')}"
-                    for c in rag_chunks
-                    if isinstance(c, dict)
-                )
+                rag_context = serialize_procedural_guidance(rag_chunks)
             except Exception as rag_err:
                 logger.debug("RAG retrieval failed during summary generation: %s", rag_err)
 

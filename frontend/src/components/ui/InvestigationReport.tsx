@@ -104,6 +104,32 @@ export function InvestigationReport({
             return <code className="ir-inline-code">{children}</code>
           },
           hr: () => <hr className="ir-divider" />,
+          a: ({ href, children }) => {
+            const safeHref = href && /^(https?:|\/|#|mailto:)/i.test(href.trim()) ? href : '#'
+            const isExternal = safeHref.startsWith('http')
+            return (
+              <a
+                href={safeHref}
+                target={isExternal ? '_blank' : undefined}
+                rel={isExternal ? 'noopener noreferrer' : undefined}
+                className="text-[#168a52] underline hover:text-[#116e41]"
+              >
+                {children}
+              </a>
+            )
+          },
+          img: ({ alt }) => (
+            <span className="inline-block rounded bg-[#f3f4f6] px-2 py-1 text-xs text-[#667085] font-mono">
+              [{alt ? String(alt) : 'Image'} (external media blocked)]
+            </span>
+          ),
+        }}
+        urlTransform={(url: string) => {
+          const trimmed = url.trim().toLowerCase()
+          if (/^(https?:|\/|#|mailto:)/.test(trimmed)) {
+            return url
+          }
+          return ''
         }}
       >
         {content}

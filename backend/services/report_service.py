@@ -12,13 +12,24 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from backend.models import Evidence, Incident, Report
+from backend.security import (
+    render_report_to_html,
+    sanitize_code_block,
+    sanitize_markdown_prose,
+    sanitize_table_cell,
+    sanitize_text,
+)
 
 TEMPLATE_DIR = Path(__file__).parent.parent.parent / "reports" / "templates"
 
 _jinja_env = Environment(
     loader=FileSystemLoader(str(TEMPLATE_DIR)),
-    autoescape=select_autoescape(enabled_extensions=["html"]),
+    autoescape=False,
 )
+_jinja_env.filters["sanitize_text"] = sanitize_text
+_jinja_env.filters["sanitize_cell"] = sanitize_table_cell
+_jinja_env.filters["sanitize_code"] = sanitize_code_block
+_jinja_env.filters["sanitize_markdown"] = sanitize_markdown_prose
 
 
 async def generate_report(
@@ -64,10 +75,16 @@ async def generate_report(
         recommended_actions=recommended,
     )
 
+    fmt = format.upper() if format else "MARKDOWN"
+    if fmt == "HTML":
+        rendered_content = render_report_to_html(content)
+    else:
+        rendered_content = content
+
     report = Report(
         incident_id=incident.id,
-        format=format,
-        content=content,
+        format=fmt,
+        content=rendered_content,
         ai_summary=ai_summary,
         recommended_actions=recommended,
     )

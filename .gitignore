@@ -42,4 +42,12 @@ dist/
 build/
 .next/
 
+# Generated reports & keys
+generated_reports/
+*.pem
+*.key
+*.crt
+
 team-work/
+# TypeScript build cache
+frontend/tsconfig.tsbuildinfo

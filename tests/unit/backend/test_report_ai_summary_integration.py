@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from backend.database import Base, get_db
 from backend.main import app
-from backend.models import Evidence, Incident, Report, SecurityEvent
+from backend.models import Evidence, Incident, Report, SecurityEvent, User
 
 NOW = datetime(2025, 8, 19, 14, 20, 0, tzinfo=timezone.utc)
 
@@ -62,14 +62,26 @@ async def seeded_report_env():
             role="INITIAL_ACCESS",
             sequence_order=1,
         )
-        session.add_all([event, incident, evidence])
+        user = User(
+            id=uuid.uuid4(),
+            email="analyst@report.test",
+            password_hash="fakehash",
+            role="analyst",
+            is_active=True,
+        )
+        session.add_all([event, incident, evidence, user])
         await session.commit()
 
     async def override_get_db():
         async with session_factory() as session:
             yield session
 
+    async def override_get_current_user():
+        return user
+
+    from backend.auth import get_current_user
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = override_get_current_user
     client = TestClient(app, raise_server_exceptions=True)
 
     try:

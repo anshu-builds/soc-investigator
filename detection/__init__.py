@@ -2,9 +2,13 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
+
+
+def _now_utc() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 class EventType(str, Enum):
@@ -57,5 +61,5 @@ class Alert:
     description: str
     contributing_event_ids: List[uuid.UUID]
     metadata: Dict[str, Any] = field(default_factory=dict)
-    detected_at: datetime = field(default_factory=datetime.utcnow)
+    detected_at: datetime = field(default_factory=_now_utc)
     attack_phase: AttackPhase = AttackPhase.UNKNOWN

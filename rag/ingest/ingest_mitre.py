@@ -7,16 +7,30 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
+from backend.security import SSRFSecurityError, validate_url_ssrf
 from rag.retriever import VectorStore
 
 MITRE_URL = "https://raw.githubusercontent.com/mitre/cti/master/enterprise-attack/enterprise-attack.json"
+MAX_MITRE_STIX_BYTES = 50 * 1024 * 1024  # 50 MB
 
 
 def ingest_mitre() -> None:
+    print("[RAG] Validating MITRE ATT&CK source URL...")
+    try:
+        validated = validate_url_ssrf(MITRE_URL, allow_private=False, allow_loopback=False)
+    except SSRFSecurityError as exc:
+        raise RuntimeError(f"MITRE STIX URL rejected by SSRF security policy: {exc}") from exc
+
     print("[RAG] Downloading MITRE ATT&CK STIX JSON...")
-    req = urllib.request.Request(MITRE_URL)
-    with urllib.request.urlopen(req) as response:
-        data = json.loads(response.read())
+    req = urllib.request.Request(
+        validated.url,
+        headers={"User-Agent": "SOC-Investigator-RAG/1.0"},
+    )
+    with urllib.request.urlopen(req, timeout=15.0) as response:
+        raw_bytes = response.read(MAX_MITRE_STIX_BYTES + 1)
+        if len(raw_bytes) > MAX_MITRE_STIX_BYTES:
+            raise RuntimeError(f"MITRE STIX JSON exceeds maximum allowed size of {MAX_MITRE_STIX_BYTES} bytes")
+        data = json.loads(raw_bytes.decode("utf-8"))
 
     print("[RAG] Parsing techniques...")
     documents = []

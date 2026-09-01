@@ -163,33 +163,54 @@ async def _with_retry(
     raise RuntimeError("Unexpected retry loop exit")
 
 
+_llm_semaphore: Optional[asyncio.Semaphore] = None
+
+
+def get_llm_semaphore() -> asyncio.Semaphore:
+    """Return the process-wide LLM concurrency semaphore."""
+    global _llm_semaphore
+    if _llm_semaphore is None:
+        curr_settings = get_settings()
+        _llm_semaphore = asyncio.Semaphore(curr_settings.max_concurrent_llm_requests)
+    return _llm_semaphore
+
+
+def reset_llm_semaphore() -> None:
+    """Reset the LLM semaphore (used in tests)."""
+    global _llm_semaphore
+    _llm_semaphore = None
+
+
 async def call_llm(system_prompt: str, user_prompt: str) -> str:
-    provider = settings.llm_provider.lower()
+    """Generate LLM response with exponential backoff, provider fallback, and bounded concurrency."""
+    sem = get_llm_semaphore()
+    async with sem:
+        provider = settings.llm_provider.lower()
 
-    async def _run_gemini() -> str:
-        adapter = GeminiAdapter()
-        return await _with_retry(lambda: adapter.generate(system_prompt, user_prompt))
+        async def _run_gemini() -> str:
+            adapter = GeminiAdapter()
+            return await _with_retry(lambda: adapter.generate(system_prompt, user_prompt))
 
-    async def _run_openai() -> str:
-        adapter = OpenAIAdapter()
-        return await _with_retry(lambda: adapter.generate(system_prompt, user_prompt))
+        async def _run_openai() -> str:
+            adapter = OpenAIAdapter()
+            return await _with_retry(lambda: adapter.generate(system_prompt, user_prompt))
 
-    if provider == "gemini":
+        if provider == "gemini":
+            try:
+                return await _run_gemini()
+            except Exception as e:
+                logger.warning("Gemini primary provider failed, falling back to OpenAI.")
+                if settings.openai_api_key:
+                    return await _run_openai()
+                raise
+
         try:
-            return await _run_gemini()
+            return await _run_openai()
         except Exception as e:
-            logger.warning("Gemini primary provider failed, falling back to OpenAI.")
-            if settings.openai_api_key:
-                return await _run_openai()
+            logger.warning("OpenAI primary provider failed, falling back to Gemini.")
+            if settings.gemini_api_key:
+                return await _run_gemini()
             raise
-
-    try:
-        return await _run_openai()
-    except Exception as e:
-        logger.warning("OpenAI primary provider failed, falling back to Gemini.")
-        if settings.gemini_api_key:
-            return await _run_gemini()
-        raise
 
 
 async def _stream_with_pretoken_retry(
@@ -233,38 +254,43 @@ async def _stream_with_pretoken_retry(
 
 
 async def call_llm_stream(system_prompt: str, user_prompt: str) -> AsyncIterator[str]:
-    """Stream responses from the configured LLM provider with safe pre-first-token fallback."""
-    provider = settings.llm_provider.lower()
+    """Stream responses from the configured LLM provider with safe pre-first-token fallback and concurrency bounds."""
+    sem = get_llm_semaphore()
+    await sem.acquire()
+    try:
+        provider = settings.llm_provider.lower()
 
-    async def _try_stream(primary: BaseLLMClient, secondary: Optional[BaseLLMClient]) -> AsyncIterator[str]:
-        has_yielded = False
-        try:
-            async for token in _stream_with_pretoken_retry(primary, system_prompt, user_prompt):
-                has_yielded = True
-                yield token
-            return
-        except Exception as primary_exc:
-            if has_yielded:
-                # Streaming already started and emitted tokens; DO NOT switch to secondary
-                raise
-            if secondary is not None:
-                logger.warning(
-                    "Primary provider stream failed before first token; falling back to secondary provider. Error: %s",
-                    primary_exc,
-                )
-                async for token in _stream_with_pretoken_retry(secondary, system_prompt, user_prompt):
+        async def _try_stream(primary: BaseLLMClient, secondary: Optional[BaseLLMClient]) -> AsyncIterator[str]:
+            has_yielded = False
+            try:
+                async for token in _stream_with_pretoken_retry(primary, system_prompt, user_prompt):
+                    has_yielded = True
                     yield token
                 return
-            raise
+            except Exception as primary_exc:
+                if has_yielded:
+                    # Streaming already started and emitted tokens; DO NOT switch to secondary
+                    raise
+                if secondary is not None:
+                    logger.warning(
+                        "Primary provider stream failed before first token; falling back to secondary provider. Error: %s",
+                        primary_exc,
+                    )
+                    async for token in _stream_with_pretoken_retry(secondary, system_prompt, user_prompt):
+                        yield token
+                    return
+                raise
 
-    if provider == "gemini":
-        primary = GeminiAdapter()
-        secondary = OpenAIAdapter() if settings.openai_api_key else None
+        if provider == "gemini":
+            primary = GeminiAdapter()
+            secondary = OpenAIAdapter() if settings.openai_api_key else None
+            async for token in _try_stream(primary, secondary):
+                yield token
+            return
+
+        primary = OpenAIAdapter()
+        secondary = GeminiAdapter() if settings.gemini_api_key else None
         async for token in _try_stream(primary, secondary):
             yield token
-        return
-
-    primary = OpenAIAdapter()
-    secondary = GeminiAdapter() if settings.gemini_api_key else None
-    async for token in _try_stream(primary, secondary):
-        yield token
+    finally:
+        sem.release()

@@ -21,9 +21,15 @@ class VectorStore:
 
     def __init__(self) -> None:
         import chromadb
+        headers: Dict[str, str] = {}
+        if settings.chroma_auth_token:
+            headers["X-Chroma-Token"] = settings.chroma_auth_token
+            headers["Authorization"] = f"Bearer {settings.chroma_auth_token}"
+
         self._client = chromadb.HttpClient(
             host=settings.chroma_host,
             port=settings.chroma_port,
+            headers=headers if headers else None,
         )
         self._collection_name = settings.chroma_collection_knowledge
         self._collection = None

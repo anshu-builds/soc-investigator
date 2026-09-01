@@ -35,20 +35,29 @@ EVENT_CATEGORY_MAP = {
 }
 
 
-def parse_upload(content: bytes, filename: str) -> List[Dict[str, Any]]:
+def parse_upload(content: bytes, filename: str, max_events: int = 10000) -> List[Dict[str, Any]]:
     text = content.decode("utf-8-sig", errors="replace")  # Handle BOM
     fn_lower = filename.lower()
 
     if fn_lower.endswith(".json"):
         data = json.loads(text)
         if isinstance(data, list):
-            return data
+            rows = data
         elif isinstance(data, dict) and "events" in data:
-            return data["events"]
-        return [data]
+            rows = data["events"]
+        else:
+            rows = [data]
+        if len(rows) > max_events:
+            raise ValueError(f"Log file exceeds maximum allowed event count of {max_events}")
+        return rows
     else:
         reader = csv.DictReader(io.StringIO(text))
-        return [row for row in reader]
+        rows = []
+        for i, row in enumerate(reader, start=1):
+            if i > max_events:
+                raise ValueError(f"Log file exceeds maximum allowed event count of {max_events}")
+            rows.append(row)
+        return rows
 
 
 async def run_pipeline(
@@ -64,6 +73,24 @@ async def run_pipeline(
     )
     if not normalized:
         return 0, 0, 0
+
+    # Filter out events whose dedup_hash already exists in the database
+    incoming_hashes = [
+        e.metadata.get("dedup_hash") for e in normalized
+        if e.metadata and e.metadata.get("dedup_hash")
+    ]
+    if incoming_hashes:
+        existing_result = await db.execute(
+            select(SecurityEvent.dedup_hash).where(SecurityEvent.dedup_hash.in_(incoming_hashes))
+        )
+        existing_hashes = set(existing_result.scalars().all())
+        if existing_hashes:
+            normalized = [
+                e for e in normalized
+                if not (e.metadata and e.metadata.get("dedup_hash") in existing_hashes)
+            ]
+            if not normalized:
+                return 0, 0, 0
 
     db_events = await _persist_events(db, normalized)
     await db.flush()
@@ -176,6 +203,7 @@ async def _persist_events(
             source_file=event.metadata.get("source_file", ""),
             is_flagged=False,
             extra_metadata=event.metadata or {},
+            dedup_hash=event.metadata.get("dedup_hash") if event.metadata else None,
         )
         db.add(db_event)
         db_events.append(db_event)

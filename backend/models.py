@@ -59,6 +59,7 @@ class User(Base):
     email           = Column(String(255), unique=True, nullable=False, index=True)
     password_hash   = Column(String(255), nullable=False)
     role            = Column(String(50), nullable=False, default="analyst")
+    is_active       = Column(Boolean, nullable=False, default=True)
     created_at      = Column(DateTime(timezone=True), nullable=False, default=_now)
 
     sessions = relationship("InvestigationSession", back_populates="analyst")
@@ -83,6 +84,7 @@ class SecurityEvent(Base):
     is_flagged       = Column(Boolean, nullable=False, default=False)
     incident_id      = Column(UUID(as_uuid=True), ForeignKey("incidents.id", ondelete="SET NULL"), nullable=True, index=True)
     extra_metadata   = Column(JSONB(), nullable=True)
+    dedup_hash       = Column(String(64), unique=True, nullable=True, index=True)
 
     incident         = relationship("Incident", back_populates="events", foreign_keys=[incident_id])
     evidence_links   = relationship("Evidence", back_populates="event")
@@ -189,3 +191,22 @@ class Report(Base):
     recommended_actions  = Column(JSONB(), nullable=True)
 
     incident             = relationship("Incident", back_populates="reports")
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id             = Column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    timestamp      = Column(DateTime(timezone=True), nullable=False, default=_now, index=True)
+    actor_user_id  = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    action         = Column(String(100), nullable=False, index=True)
+    entity_type    = Column(String(100), nullable=False, index=True)
+    entity_id      = Column(String(255), nullable=True, index=True)
+    source_ip      = Column(String(45), nullable=True)
+    user_agent     = Column(String(500), nullable=True)
+    previous_state = Column(JSONB(), nullable=True)
+    new_state      = Column(JSONB(), nullable=True)
+    details        = Column(JSONB(), nullable=True)
+    status         = Column(String(20), nullable=False, default="SUCCESS")
+
+    actor          = relationship("User", foreign_keys=[actor_user_id])

@@ -9,6 +9,14 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 
+from backend.config import get_settings
+from backend.security import (
+    SSRFSecurityError,
+    SafeAsyncClient,
+    read_bounded_response,
+    validate_url_ssrf,
+)
+
 logger = logging.getLogger("soc.wazuh.client")
 
 
@@ -53,11 +61,41 @@ class WazuhClient:
         if not self.verify_ssl:
             logger.warning("Wazuh API SSL verification is DISABLED. Insecure connections permitted.")
 
+        # Validate URL at initialization time if provided
+        if self.base_url:
+            self._validate_destination(self.base_url)
+
+    def _validate_destination(self, url: str) -> None:
+        """Validate destination against SSRF policies based on environment settings."""
+        cfg = get_settings()
+        is_prod = cfg.environment.lower() == "production"
+        allow_priv = getattr(cfg, "wazuh_allow_private_ips", False) or not is_prod
+        allow_loop = getattr(cfg, "wazuh_allow_loopback", False) or not is_prod
+        try:
+            validate_url_ssrf(
+                url,
+                allow_private=allow_priv,
+                allow_loopback=allow_loop,
+                allowed_schemes=("https", "http"),
+                resolve_dns=(self._custom_client is None),
+            )
+        except SSRFSecurityError as exc:
+            logger.error("Wazuh destination rejected by SSRF policy: %s", exc)
+            raise WazuhAPIError(f"Wazuh URL rejected by SSRF security policy: {exc}") from exc
+
     async def _get_client(self) -> httpx.AsyncClient:
         if self._client is None or self._client.is_closed:
-            self._client = httpx.AsyncClient(
+            cfg = get_settings()
+            is_prod = cfg.environment.lower() == "production"
+            allow_priv = getattr(cfg, "wazuh_allow_private_ips", False) or not is_prod
+            allow_loop = getattr(cfg, "wazuh_allow_loopback", False) or not is_prod
+
+            self._client = SafeAsyncClient(
+                allow_private=allow_priv,
+                allow_loopback=allow_loop,
                 verify=self.verify_ssl,
-                timeout=httpx.Timeout(self.timeout),
+                timeout=self.timeout,
+                max_response_size=10 * 1024 * 1024,
             )
         return self._client
 
@@ -114,7 +152,9 @@ class WazuhClient:
             )
 
         try:
-            body = resp.json()
+            import json as json_lib
+            raw_auth = await read_bounded_response(resp, max_bytes=1 * 1024 * 1024)
+            body = json_lib.loads(raw_auth.decode("utf-8"))
             # Standard Wazuh 4.x response: {"data": {"token": "..."}}
             token = body.get("data", {}).get("token") if isinstance(body.get("data"), dict) else body.get("token")
             if not token:
@@ -122,6 +162,8 @@ class WazuhClient:
             self._token = str(token)
             logger.info("Wazuh API authentication successful")
             return self._token
+        except SSRFSecurityError as exc:
+            raise WazuhAuthError(f"Authentication response exceeded security limit: {exc}") from exc
         except Exception as exc:
             logger.error("Failed to parse Wazuh authentication response: %s", exc)
             raise WazuhAuthError(f"Invalid authentication response structure: {exc}") from exc
@@ -140,10 +182,17 @@ class WazuhClient:
         headers: Optional[Dict[str, str]] = None,
     ) -> Dict[str, Any]:
         """Execute an authenticated request with JWT auto-refresh and transient retry handling."""
+        # Sanitize endpoint against path traversal and scheme smuggling
+        if "://" in endpoint or endpoint.startswith("//"):
+            raise WazuhAPIError("Absolute URLs and protocol schemes are not permitted in endpoint parameter")
+        clean_endpoint = endpoint.lstrip("/")
+        if "../" in clean_endpoint or clean_endpoint.startswith("..") or "/.." in clean_endpoint:
+            raise WazuhAPIError("Path traversal sequences are not permitted in endpoint parameter")
+
         if not self._token:
             await self.authenticate()
 
-        url = f"{self.base_url}/{endpoint.lstrip('/')}"
+        url = f"{self.base_url}/{clean_endpoint}"
         client = await self._get_client()
 
         req_headers = dict(headers or {})
@@ -176,6 +225,9 @@ class WazuhClient:
                 logger.warning("Wazuh network error, retrying in %.2fs (attempt %d/%d)", backoff, attempt, self.max_retries)
                 await asyncio.sleep(backoff)
                 continue
+            except SSRFSecurityError as exc:
+                logger.error("Wazuh request blocked by SSRF policy: %s", exc)
+                raise WazuhAPIError(f"Wazuh request rejected by SSRF policy: {exc}") from exc
 
             # Token expired or unauthorized — refresh once
             if resp.status_code == 401:
@@ -210,7 +262,11 @@ class WazuhClient:
                 )
 
             try:
-                return resp.json()
+                import json as json_lib
+                raw_bytes = await read_bounded_response(resp, max_bytes=10 * 1024 * 1024)
+                return json_lib.loads(raw_bytes.decode("utf-8"))
+            except SSRFSecurityError as exc:
+                raise WazuhAPIError(f"Wazuh API response rejected by security policy: {exc}") from exc
             except Exception as exc:
                 raise WazuhAPIError(f"Invalid JSON response from Wazuh API: {exc}") from exc
 

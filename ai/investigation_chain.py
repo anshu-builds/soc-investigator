@@ -14,6 +14,7 @@ from ai.evidence_linker import (
     extract_rag_sources,
 )
 from ai.llm_client import call_llm
+from ai.prompt_sanitizer import sanitize_rag_query, serialize_procedural_guidance
 from ai.prompt_templates import build_system_prompt, build_user_prompt
 
 logger = logging.getLogger("soc.ai")
@@ -47,12 +48,10 @@ async def run_investigation_chain(
         try:
             incident = context["incident"]
             technique_ids = [t.technique_id for t in context.get("techniques", [])]
-            query = f"{user_question} {incident.attack_type} {' '.join(technique_ids)}"
+            raw_query = f"{user_question} {getattr(incident, 'attack_type', '')} {' '.join(technique_ids)}"
+            query = sanitize_rag_query(raw_query)
             rag_chunks = await rag_retriever.retrieve(query, top_k=3)
-            rag_context = "\n\n".join(
-                f"[{c.get('title', 'Reference')}]\n{c.get('text', '')}"
-                for c in rag_chunks
-            )
+            rag_context = serialize_procedural_guidance(rag_chunks)
         except Exception as e:
             logger.debug("RAG retrieval failed: %s", e)
 

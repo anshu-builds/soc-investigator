@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -30,6 +30,10 @@ def _patch_settings(monkeypatch):
     get_settings.cache_clear()
 
 
+import uuid
+from backend.models import User
+
+
 @pytest.fixture
 def client():
     from backend.main import app, _dedup_cache
@@ -43,10 +47,27 @@ def client():
         mock.rollback = AsyncMock()
         mock.flush = AsyncMock()
         mock.add = lambda x: None
+        exec_res = MagicMock()
+        exec_res.scalars.return_value.all.return_value = []
+        mock.execute = AsyncMock(return_value=exec_res)
         yield mock
 
+    user = User(
+        id=uuid.uuid4(),
+        email="analyst@wazuh.test",
+        password_hash="fakehash",
+        role="analyst",
+        is_active=True,
+    )
+
+    async def _mock_user():
+        return user
+
+    from backend.auth import get_current_user
     app.dependency_overrides[get_db] = _mock_db
-    with patch("backend.main.create_all_tables", new_callable=AsyncMock):
+    app.dependency_overrides[get_current_user] = _mock_user
+    with patch("backend.main.create_all_tables", new_callable=AsyncMock), \
+         patch("backend.main.ensure_seed_admin", new_callable=AsyncMock):
         with TestClient(app) as c:
             yield c
     app.dependency_overrides.clear()

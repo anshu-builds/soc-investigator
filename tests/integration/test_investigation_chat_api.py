@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from backend.database import Base, get_db
 from backend.main import app
-from backend.models import ChatMessage, Evidence, Incident, InvestigationSession, SecurityEvent
+from backend.models import ChatMessage, Evidence, Incident, InvestigationSession, SecurityEvent, User
 
 NOW = datetime(2025, 8, 19, 14, 20, 0, tzinfo=timezone.utc)
 
@@ -63,21 +63,36 @@ async def seeded_app_client():
             role="INITIAL_ACCESS",
             sequence_order=1,
         )
+        user_id = uuid.uuid4()
+        user_obj = User(
+            id=user_id,
+            email="analyst@test.local",
+            password_hash="fakehash",
+            role="analyst",
+            is_active=True,
+        )
         inv_session = InvestigationSession(
             id=session_id,
             incident_id=incident_id,
+            analyst_id=user_id,
         )
 
-        session.add_all([ev_obj, inc_obj, evidence_obj, inv_session])
+        session.add_all([user_obj, ev_obj, inc_obj, evidence_obj, inv_session])
         await session.commit()
 
     async def _override_get_db():
         async with session_factory() as s:
             yield s
 
-    app.dependency_overrides[get_db] = _override_get_db
+    async def _override_get_current_user():
+        return user_obj
 
-    with patch("backend.main.create_all_tables", new_callable=AsyncMock):
+    from backend.auth import get_current_user
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_get_current_user
+
+    with patch("backend.main.create_all_tables", new_callable=AsyncMock), \
+         patch("backend.main.ensure_seed_admin", new_callable=AsyncMock):
         with TestClient(app) as test_client:
             yield test_client, session_id, incident_id, ev_id
 
@@ -132,8 +147,8 @@ class TestInvestigationChatAPI:
 
             # Verify Turn 2 received Turn 1 in system prompt conversation history
             t2_sys_prompt = mock_llm.call_args[0][0]
-            assert "Analyst: What is the attack summary?" in t2_sys_prompt
-            assert "Assistant: ## Summary" in t2_sys_prompt
+            assert '<message role="analyst">What is the attack summary?</message>' in t2_sys_prompt
+            assert '<message role="assistant">## Summary' in t2_sys_prompt
 
     def test_chat_session_not_found(self, seeded_app_client):
         client, _, _, _ = seeded_app_client

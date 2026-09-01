@@ -110,6 +110,7 @@ class IncidentListResponse(BaseModel):
 
 
 class IncidentStatusUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     status: str = Field(..., pattern="^(OPEN|INVESTIGATING|CLOSED|FALSE_POSITIVE)$")
 
 
@@ -132,6 +133,7 @@ class ChatMessageOut(ORMBase):
 
 
 class ChatRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     message: str = Field(..., min_length=1, max_length=2000)
 
 
@@ -151,7 +153,8 @@ class MessageListResponse(BaseModel):
 
 
 class ReportRequest(BaseModel):
-    format: str = Field("MARKDOWN", pattern="^(MARKDOWN|JSON)$")
+    model_config = ConfigDict(extra="forbid")
+    format: str = Field("MARKDOWN", pattern="^(MARKDOWN|JSON|HTML)$")
     include_ai_summary: bool = True
 
 
@@ -185,8 +188,9 @@ class DashboardSummary(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    email: str
-    password: str
+    model_config = ConfigDict(extra="forbid")
+    email: str = Field(..., min_length=3, max_length=255)
+    password: str = Field(..., min_length=1, max_length=128)
 
 
 class TokenResponse(BaseModel):
@@ -196,6 +200,7 @@ class TokenResponse(BaseModel):
 
 
 class NLQueryRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     question: str = Field(..., min_length=1, max_length=500)
 
 

@@ -129,7 +129,37 @@ export async function getReport(reportId: string): Promise<ReportOut> {
   return request<ReportOut>(`/api/reports/${reportId}`)
 }
 
+export async function login(
+  email: string,
+  password: string,
+): Promise<{ access_token: string; token_type: string; expires_in: number }> {
+  const data = await request<{ access_token: string; token_type: string; expires_in: number }>('/api/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ email, password }),
+  })
+  if (typeof window !== 'undefined' && data.access_token) {
+    localStorage.setItem('soc_token', data.access_token)
+  }
+  return data
+}
+
+export function logout(): void {
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem('soc_token')
+  }
+}
+
 export function getReportDownloadUrl(reportId: string): string {
+  return `${BASE_URL}/api/reports/${reportId}/download`
+}
+
+export async function downloadReportFile(reportId: string): Promise<Blob> {
   const token = getToken()
-  return `${BASE_URL}/api/reports/${reportId}/download?token=${token}`
+  const res = await fetch(`${BASE_URL}/api/reports/${reportId}/download`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+  if (!res.ok) {
+    throw new Error('Failed to download report')
+  }
+  return res.blob()
 }

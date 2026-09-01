@@ -4,21 +4,21 @@
 
 # SOC Investigator — Incident Investigation Report
 
-**Incident:** {{ incident.title }}
+**Incident:** {{ incident.title | sanitize_text }}
 
 | | |
 |---|---|
-| **Severity** | {{ incident.severity }} |
-| **Status** | {{ incident.status }} |
+| **Severity** | {{ incident.severity | sanitize_cell }} |
+| **Status** | {{ incident.status | sanitize_cell }} |
 | **Confidence** | {{ "%.0f"|format(incident.confidence * 100) }}% |
-| **Report Generated** | {{ report_generated_at }} |
+| **Report Generated** | {{ report_generated_at | sanitize_cell }} |
 | **Incident ID** | `{{ incident.id }}` |
 
 ---
 
 ## 1. Executive Summary
 
-{{ ai_summary or narrative }}
+{{ (ai_summary or narrative) | sanitize_markdown }}
 
 ---
 
@@ -26,12 +26,12 @@
 
 | Field | Value |
 |---|---|
-| **Severity** | {{ incident.severity }} |
+| **Severity** | {{ incident.severity | sanitize_cell }} |
 | **Confidence** | {{ "%.0f"|format(incident.confidence * 100) }}% |
-| **Attack Type** | {{ incident.attack_type }} |
-| **Affected User** | {{ incident.affected_username or "N/A" }} |
-| **Affected Host** | {{ incident.affected_host or "N/A" }} |
-| **Attacking Source** | {{ incident.source_ip or "N/A" }} |
+| **Attack Type** | {{ incident.attack_type | sanitize_cell }} |
+| **Affected User** | {{ (incident.affected_username or "N/A") | sanitize_cell }} |
+| **Affected Host** | {{ (incident.affected_host or "N/A") | sanitize_cell }} |
+| **Attacking Source** | {{ (incident.source_ip or "N/A") | sanitize_cell }} |
 | **First Detected** | {{ incident.first_seen.strftime("%Y-%m-%d %H:%M:%S UTC") }} |
 | **Last Event** | {{ incident.last_seen.strftime("%Y-%m-%d %H:%M:%S UTC") }} |
 | **Total Events** | {{ incident.event_count }} |
@@ -41,7 +41,7 @@
 ## 3. Attack Timeline
 
 {% for entry in timeline %}
-- **{{ entry.timestamp.strftime("%H:%M:%S UTC") }}** — {{ entry.phase }}{% if entry.event_type %} `{{ entry.event_type }}`{% endif %} — {{ entry.description }}
+- **{{ entry.timestamp.strftime("%H:%M:%S UTC") }}** — {{ entry.phase | sanitize_text }}{% if entry.event_type %} `{{ entry.event_type | sanitize_text }}`{% endif %} — {{ entry.description | sanitize_text }}
 {% endfor %}
 
 ---
@@ -49,9 +49,9 @@
 ## 4. MITRE ATT&CK
 
 {% for tech in techniques %}
-> **{{ tech.technique_id }}{% if tech.sub_technique_id %}.{{ tech.sub_technique_id.split('.')[-1] }}{% endif %}** — {{ tech.technique_name }}{% if tech.sub_technique_name %}: {{ tech.sub_technique_name }}{% endif %}
+> **{{ tech.technique_id }}{% if tech.sub_technique_id %}.{{ tech.sub_technique_id.split('.')[-1] }}{% endif %}** — {{ tech.technique_name | sanitize_text }}{% if tech.sub_technique_name %}: {{ tech.sub_technique_name | sanitize_text }}{% endif %}
 >
-> Tactic: {{ tech.tactic }} · Confidence: {{ "%.0f"|format(tech.confidence * 100) }}%
+> Tactic: {{ tech.tactic | sanitize_text }} · Confidence: {{ "%.0f"|format(tech.confidence * 100) }}%
 {% endfor %}
 
 ---
@@ -60,31 +60,31 @@
 
 {% for group in evidence_groups %}
 {% if group.is_group %}
-### {{ group.event_type }} Pattern
+### {{ group.event_type | sanitize_text }} Pattern
 
-{{ group.count }} {{ group.event_type | lower }} events
-Source: {{ group.source_ip }} · Target: {{ group.username }}
+{{ group.count }} {{ group.event_type | lower | sanitize_text }} events
+Source: {{ group.source_ip | sanitize_text }} · Target: {{ group.username | sanitize_text }}
 Time: {{ group.first_time.strftime("%H:%M:%S") }}–{{ group.last_time.strftime("%H:%M:%S UTC") }}
-Evidence: {{ group.label_range }}
+Evidence: {{ group.label_range | sanitize_text }}
 
 {% if group.raw_log_sample %}
 ```
-{{ group.raw_log_sample }}
+{{ group.raw_log_sample | sanitize_code }}
 ```
 {% endif %}
 
 {% else %}
-### [{{ group.label }}] {{ group.role }}
+### [{{ group.label | sanitize_text }}] {{ group.role | sanitize_text }}
 
 **Time:** {{ group.first_time.strftime("%Y-%m-%d %H:%M:%S UTC") if group.first_time else "N/A" }}
-**Event:** {{ group.event_type }}
-**Source:** {{ group.source_ip }}
-**User:** {{ group.username }}
-**Description:** {{ group.description }}
+**Event:** {{ group.event_type | sanitize_text }}
+**Source:** {{ group.source_ip | sanitize_text }}
+**User:** {{ group.username | sanitize_text }}
+**Description:** {{ group.description | sanitize_text }}
 
 {% if group.raw_log_sample %}
 ```
-{{ group.raw_log_sample }}
+{{ group.raw_log_sample | sanitize_code }}
 ```
 {% endif %}
 
@@ -99,15 +99,15 @@ Evidence: {{ group.label_range }}
 
 {% for group in evidence_groups %}
 {% if not group.is_group %}
-- {{ group.description }} ({{ group.label }})
+- {{ group.description | sanitize_text }} ({{ group.label | sanitize_text }})
 {% else %}
-- {{ group.count }} {{ group.event_type | lower }} events from {{ group.source_ip }} targeting {{ group.username }} ({{ group.label_range }})
+- {{ group.count }} {{ group.event_type | lower | sanitize_text }} events from {{ group.source_ip | sanitize_text }} targeting {{ group.username | sanitize_text }} ({{ group.label_range | sanitize_text }})
 {% endif %}
 {% endfor %}
 
 ### Analytical Assessment
 
-{{ ai_summary or narrative }}
+{{ (ai_summary or narrative) | sanitize_markdown }}
 
 *This assessment is an analytical interpretation based on the cited evidence, not a directly observed fact.*
 
@@ -116,7 +116,7 @@ Evidence: {{ group.label_range }}
 ## 7. Recommended Actions
 
 {% for action in recommended_actions %}
-{{ loop.index }}. {{ action }}
+{{ loop.index }}. {{ action | sanitize_text }}
 {% endfor %}
 
 ---

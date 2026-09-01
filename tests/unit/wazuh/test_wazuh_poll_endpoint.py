@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import uuid
 from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
+from backend.models import User
 from tests.fixtures.wazuh_alerts import ssh_auth_failure
 
 
@@ -37,11 +39,26 @@ def client():
         mock.commit = AsyncMock()
         mock.rollback = AsyncMock()
         mock.flush = AsyncMock()
-        mock.add = lambda x: None
-        yield mock
+    admin_user = User(
+        id=uuid.uuid4(),
+        email="admin@wazuh.test",
+        password_hash="fakehash",
+        role="admin",
+        is_active=True,
+    )
 
+    async def _mock_admin():
+        return admin_user
+
+    async def _mock_user():
+        return admin_user
+
+    from backend.auth import get_current_user, require_admin
     app.dependency_overrides[get_db] = _mock_db
-    with patch("backend.main.create_all_tables", new_callable=AsyncMock):
+    app.dependency_overrides[get_current_user] = _mock_user
+    app.dependency_overrides[require_admin] = _mock_admin
+    with patch("backend.main.create_all_tables", new_callable=AsyncMock), \
+         patch("backend.main.ensure_seed_admin", new_callable=AsyncMock):
         with TestClient(app) as c:
             yield c
     app.dependency_overrides.clear()

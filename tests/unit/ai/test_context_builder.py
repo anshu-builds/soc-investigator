@@ -23,12 +23,11 @@ class TestFormatChatHistory:
             {"role": "user", "content": "Did they compromise any user accounts?"},
         ]
         formatted = format_chat_history(history)
-        expected = (
-            "Analyst: What is the source IP of the attacker?\n\n"
-            "Assistant: The attacker originated from 192.168.1.50 [EV-001].\n\n"
-            "Analyst: Did they compromise any user accounts?"
-        )
-        assert formatted == expected
+        assert "<conversation_history>" in formatted
+        assert '<message role="analyst">What is the source IP of the attacker?</message>' in formatted
+        assert '<message role="assistant">The attacker originated from 192.168.1.50 [EV-001].</message>' in formatted
+        assert '<message role="analyst">Did they compromise any user accounts?</message>' in formatted
+        assert "</conversation_history>" in formatted
 
     def test_chat_message_objects_formatted_properly(self):
         msg1 = ChatMessage(
@@ -44,8 +43,8 @@ class TestFormatChatHistory:
             content="Summary of attack: Brute force followed by privilege escalation [EV-001].",
         )
         formatted = format_chat_history([msg1, msg2])
-        assert "Analyst: Can you summarize the attack?" in formatted
-        assert "Assistant: Summary of attack: Brute force followed by privilege escalation [EV-001]." in formatted
+        assert '<message role="analyst">Can you summarize the attack?</message>' in formatted
+        assert '<message role="assistant">Summary of attack: Brute force followed by privilege escalation [EV-001].</message>' in formatted
 
     def test_empty_content_messages_skipped(self):
         history = [
@@ -55,7 +54,6 @@ class TestFormatChatHistory:
             {"role": "assistant", "content": "How can I help you investigate?"},
         ]
         formatted = format_chat_history(history)
-        assert formatted == (
-            "Analyst: Hello\n\n"
-            "Assistant: How can I help you investigate?"
-        )
+        assert '<message role="analyst">Hello</message>' in formatted
+        assert '<message role="assistant">How can I help you investigate?</message>' in formatted
+        assert formatted.count("<message") == 2

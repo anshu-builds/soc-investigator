@@ -92,8 +92,8 @@ class TestInvestigationChain:
 
             mock_llm.assert_called_once()
             call_sys_prompt = mock_llm.call_args[0][0]
-            assert "Analyst: What is the attacking IP?" in call_sys_prompt
-            assert "Assistant: The attacker IP is 192.168.1.50 [EV-001]." in call_sys_prompt
+            assert '<message role="analyst">What is the attacking IP?</message>' in call_sys_prompt
+            assert '<message role="assistant">The attacker IP is 192.168.1.50 [EV-001].</message>' in call_sys_prompt
 
     @pytest.mark.asyncio
     async def test_incident_not_found(self):

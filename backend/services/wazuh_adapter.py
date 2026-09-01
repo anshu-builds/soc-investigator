@@ -324,6 +324,7 @@ def normalize_wazuh_alert(alert: WazuhAlert) -> NormalizedEvent:
         "wazuh_mitre": alert.rule.mitre,
         "severity_raw": severity,
         "wazuh_raw": alert.model_dump(mode="python"),
+        "dedup_hash": compute_dedup_hash(alert),
     }
 
     return NormalizedEvent(
