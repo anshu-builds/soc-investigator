@@ -11,7 +11,24 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from backend.config import get_settings
 
-settings = get_settings()
+
+class _SettingsProxy:
+    """Proxy that dynamically delegates attribute access to get_settings().
+
+    Ensures that runtime configuration updates and test environment overrides
+    (e.g. via monkeypatch.setenv and get_settings.cache_clear()) are immediately
+    reflected without holding onto stale module-level references, while preserving
+    compatibility with @patch("ai.llm_client.settings").
+    """
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(get_settings(), name)
+
+    def __repr__(self) -> str:
+        return repr(get_settings())
+
+
+settings = _SettingsProxy()
 logger = logging.getLogger("soc.ai")
 
 

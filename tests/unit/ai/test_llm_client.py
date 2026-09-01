@@ -132,3 +132,17 @@ async def test_primary_openai_succeeds(mock_openai, mock_gemini, mock_settings):
     assert result == "OpenAI direct response"
     mock_openai.assert_called_once_with("sys prompt", "user prompt")
     mock_gemini.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_settings_proxy_dynamically_reflects_environment_changes(monkeypatch):
+    """Verify ai.llm_client.settings dynamically reflects environment updates after cache_clear."""
+    from backend.config import get_settings
+    from ai.llm_client import settings
+
+    monkeypatch.setenv("OPENAI_API_KEY", "dynamically-injected-key")
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    get_settings.cache_clear()
+
+    assert settings.openai_api_key == "dynamically-injected-key"
+    assert settings.llm_provider == "openai"
