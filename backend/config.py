@@ -3,7 +3,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import List
 
-from pydantic import field_validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pathlib import Path
 
@@ -109,6 +109,17 @@ class Settings(BaseSettings):
     wazuh_allow_private_ips: bool = False
     wazuh_allow_loopback: bool = False
 
+    # Sarvam TTS: disabled until an operator explicitly enables provider egress.
+    sarvam_tts_enabled: bool = False
+    sarvam_api_key: str = ""
+    sarvam_tts_language: str = "en-IN"
+    sarvam_tts_speaker: str = "shubh"
+    sarvam_tts_timeout: float = Field(15.0, ge=1.0, le=60.0)
+    sarvam_tts_max_characters: int = Field(1000, ge=1, le=7500)
+    sarvam_tts_max_chunks: int = Field(3, ge=1, le=3)
+    sarvam_tts_max_audio_bytes_per_clip: int = Field(2_000_000, ge=1, le=2_000_000)
+    sarvam_tts_max_total_audio_bytes: int = Field(4_000_000, ge=1, le=6_000_000)
+
     # Rate Limiting & Resource Protection (SEC-02)
     rate_limit_login_per_minute: int = 5
     rate_limit_nlu_per_minute: int = 30
@@ -118,10 +129,15 @@ class Settings(BaseSettings):
     rate_limit_wazuh_poll_per_minute: int = 3
     rate_limit_session_create_per_minute: int = 20
     rate_limit_status_update_per_minute: int = 30
+    rate_limit_tts_per_minute: int = Field(5, ge=1, le=60)
 
     max_concurrent_llm_requests: int = 5
     max_concurrent_llm_per_user: int = 2
     max_concurrent_reports: int = 2
+    # The built-in limiter is process-local. This cap applies independently to
+    # each Uvicorn worker; it is intentionally not presented as deployment-wide.
+    max_concurrent_tts_per_process: int = Field(2, ge=1, le=10)
+    max_concurrent_tts_per_user: int = Field(1, ge=1, le=3)
 
     trusted_proxies: str = ""
 

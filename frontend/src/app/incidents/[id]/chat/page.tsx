@@ -1,72 +1,146 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { AlertCircle, Bot, ChevronLeft, Loader2, Send, User } from 'lucide-react'
+import {
+  AlertCircle,
+  Bot,
+  ChevronLeft,
+  FileText,
+  Loader2,
+  Send,
+  Shield,
+  Sparkles,
+  Terminal,
+  User,
+} from 'lucide-react'
 
 import { createSession, getIncident, sendMessage } from '@/lib/api'
 import type { ChatMessage, Incident } from '@/lib/types'
-
-import { SeverityBadge } from '@/components/ui/badges'
+import { MitreTechniqueChip, SeverityBadge } from '@/components/ui/badges'
 import { InvestigationReport } from '@/components/ui/InvestigationReport'
+import { TtsControls } from '@/components/ui/TtsControls'
 
 const SUGGESTIONS = [
   'What triggered this alert and when?',
-  'Which MITRE techniques were used?',
-  'What evidence supports this incident?',
+  'Which MITRE techniques were identified?',
+  'What database evidence supports this incident?',
   'What are the recommended containment steps?',
 ]
 
 const generateMessageId = (): string => {
-  if (
-    typeof crypto !== 'undefined' &&
-    typeof crypto.randomUUID === 'function'
-  ) {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID()
   }
-
   return `msg-${Date.now()}-${Math.random().toString(36).slice(2)}`
 }
 
 function Answer({ message }: { message: ChatMessage }) {
   const isUser = message.role === 'user'
 
-  return (
-    <div className={`flex gap-3 ${isUser ? 'justify-end' : ''}`}>
-      {!isUser && (
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#f0f8f4] self-start mt-1">
-          <Bot className="h-4 w-4 text-[#168a52]" />
-        </span>
-      )}
-
-      {isUser ? (
-        <div className="max-w-[85%] rounded-xl px-4 py-3 text-sm leading-6 bg-[#168a52] text-white">
+  if (isUser) {
+    return (
+      <div className="flex justify-end gap-2.5">
+        <div className="max-w-[80%] rounded-xl border border-[#10b981]/30 bg-[#10b981]/15 px-4 py-3 text-xs text-[#f3f4f6] leading-relaxed">
           {message.content}
         </div>
-      ) : (
-        <div className="flex-1 max-w-[85%] border border-[#e6e8eb] bg-white rounded-xl px-5 py-4">
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#171e28] border border-[#1f2937] text-[#10b981]">
+          <User className="h-3.5 w-3.5" />
+        </span>
+      </div>
+    )
+  }
+
+  const answerType = message.answer_type || 'FACTUAL'
+  const confidence = message.ai_confidence !== undefined ? Math.round(message.ai_confidence * 100) : null
+
+  return (
+    <div className="flex gap-3">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[#10b981]/30 bg-[#10b981]/10 text-[#10b981] mt-1">
+        <Bot className="h-4 w-4" />
+      </span>
+
+      <div className="flex-1 max-w-[90%] rounded-xl border border-[#1f2937] bg-[#11161d] p-4 sm:p-5 space-y-3">
+        {/* Confidence & Answer Type Header */}
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#1f2937] pb-2.5 text-xs font-mono">
+          <div className="flex items-center gap-2">
+            <span
+              className={`inline-flex items-center rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
+                answerType === 'FACTUAL'
+                  ? 'border border-[#0e7490] bg-[#083344] text-[#38bdf8]'
+                  : answerType === 'INFERENCE'
+                  ? 'border border-[#713f12] bg-[#422006] text-[#facc15]'
+                  : 'border border-[#581c87] bg-[#3b0764] text-[#c084fc]'
+              }`}
+            >
+              {answerType}
+            </span>
+            {confidence !== null && (
+              <span className="text-[#9ca3af] text-[11px]">
+                Confidence: <strong className="text-[#f3f4f6]">{confidence}%</strong>
+              </span>
+            )}
+          </div>
+          <span className="text-[10px] text-[#6b7280]">
+            {new Date(message.timestamp).toLocaleTimeString()}
+          </span>
+        </div>
+
+        {/* Structured Investigation Report Body */}
+        <div className="text-xs text-[#d1d5db]">
           <InvestigationReport
             content={message.content}
             answerType={message.answer_type}
             confidence={message.ai_confidence}
           />
         </div>
-      )}
 
-      {isUser && (
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#eaf4ee]">
-          <User className="h-4 w-4 text-[#168a52]" />
-        </span>
-      )}
+        {/* Grounded Evidence Citations */}
+        {message.evidence_ids && message.evidence_ids.length > 0 && (
+          <div className="border-t border-[#1f2937] pt-2.5 flex flex-wrap items-center gap-1.5 text-xs font-mono">
+            <span className="text-[#6b7280] text-[10px] uppercase">Grounded Evidence:</span>
+            {message.evidence_ids.map((evId) => (
+              <span key={evId} className="evidence-chip">
+                {evId}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* MITRE Technique References */}
+        {message.mitre_references && message.mitre_references.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5 text-xs font-mono">
+            <span className="text-[#6b7280] text-[10px] uppercase">ATT&CK References:</span>
+            {message.mitre_references.map((m) => (
+              <MitreTechniqueChip key={m} techniqueId={m} />
+            ))}
+          </div>
+        )}
+
+        {/* RAG Knowledge Playbooks Used */}
+        {message.rag_sources && message.rag_sources.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5 text-xs font-mono text-[#9ca3af]">
+            <span className="text-[#6b7280] text-[10px] uppercase">Playbook Sources:</span>
+            {message.rag_sources.map((src) => (
+              <span key={src} className="rounded bg-[#171e28] px-1.5 py-0.5 text-[10px] text-[#9ca3af] border border-[#1f2937]">
+                {src}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Sarvam TTS Audio Controls */}
+        {message.isPersisted && (
+          <div className="border-t border-[#1f2937] pt-2.5">
+            <TtsControls messageId={message.id} />
+          </div>
+        )}
+      </div>
     </div>
   )
 }
 
-export default function ChatPage({
-  params,
-}: {
-  params: Promise<{ id: string }>
-}) {
+export default function ChatPage({ params }: { params: Promise<{ id: string }> }) {
   const [incident, setIncident] = useState<Incident | null>(null)
   const [session, setSession] = useState<string | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -78,12 +152,7 @@ export default function ChatPage({
 
   useEffect(() => {
     params
-      .then(({ id }) =>
-        Promise.all([
-          getIncident(id),
-          createSession(id),
-        ]),
-      )
+      .then(({ id }) => Promise.all([getIncident(id), createSession(id)]))
       .then(([nextIncident, nextSession]) => {
         setIncident(nextIncident)
         setSession(nextSession.session_id)
@@ -95,16 +164,15 @@ export default function ChatPage({
     bottom.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, sending])
 
-  const send = async () => {
-    if (!input.trim() || !session || sending) return
-
-    const content = input.trim()
+  const send = async (overridePrompt?: string) => {
+    const promptToSend = (overridePrompt || input).trim()
+    if (!promptToSend || !session || sending) return
 
     const userMessage: ChatMessage = {
       id: generateMessageId(),
       session_id: session,
       role: 'user',
-      content,
+      content: promptToSend,
       timestamp: new Date().toISOString(),
     }
 
@@ -113,8 +181,7 @@ export default function ChatPage({
     setSending(true)
 
     try {
-      const response = await sendMessage(session, content)
-
+      const response = await sendMessage(session, promptToSend)
       setMessages((items) => [
         ...items,
         {
@@ -123,9 +190,12 @@ export default function ChatPage({
           role: 'assistant',
           content: response.answer,
           evidence_ids: response.evidence_ids,
+          mitre_references: response.mitre_references,
+          rag_sources: response.rag_sources,
           answer_type: response.answer_type,
           ai_confidence: response.confidence,
           timestamp: new Date().toISOString(),
+          isPersisted: true,
         },
       ])
     } catch (e) {
@@ -135,9 +205,7 @@ export default function ChatPage({
           id: generateMessageId(),
           session_id: session,
           role: 'assistant',
-          content: `Unable to complete investigation: ${
-            e instanceof Error ? e.message : 'Unknown error'
-          }`,
+          content: `Investigation query failed: ${e instanceof Error ? e.message : 'Unknown error'}`,
           timestamp: new Date().toISOString(),
         },
       ])
@@ -148,117 +216,139 @@ export default function ChatPage({
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center text-sm text-[#667085]">
-        <Loader2 className="mr-2 h-4 w-4 animate-spin text-[#168a52]" />
-        Preparing investigation…
+      <div className="flex min-h-[60vh] items-center justify-center text-xs text-[#9ca3af]">
+        <Loader2 className="mr-2 h-4 w-4 animate-spin text-[#10b981]" />
+        Initializing AI Copilot investigation session…
       </div>
     )
   }
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <header className="border-b border-[#e6e8eb] bg-white px-5 py-4 sm:px-8">
-        <Link
-          href={`/incidents/${incident?.id || ''}`}
-          className="inline-flex items-center text-sm text-[#667085] hover:text-[#111827]"
-        >
-          <ChevronLeft className="mr-1 h-4 w-4" />
-          Incident
-        </Link>
-
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <h1 className="text-lg font-semibold text-[#111827]">
-            Investigation
-          </h1>
-
-          {incident && <SeverityBadge severity={incident.severity} />}
-
-          <span className="text-sm text-[#667085]">
-            {incident?.title}
-          </span>
+    <div className="flex min-h-[calc(100vh-80px)] flex-col space-y-4">
+      {/* Investigation Session Header */}
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#1f2937] pb-4">
+        <div>
+          <Link
+            href={`/incidents/${incident?.id || ''}`}
+            className="inline-flex items-center text-xs font-mono text-[#9ca3af] hover:text-[#f3f4f6] transition-colors"
+          >
+            <ChevronLeft className="mr-1 h-3.5 w-3.5" /> Back to Incident Workspace
+          </Link>
+          <div className="mt-1.5 flex flex-wrap items-center gap-2">
+            <h1 className="text-base font-bold text-[#f3f4f6] flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-[#10b981]" />
+              AI Investigation Copilot
+            </h1>
+            {incident && <SeverityBadge severity={incident.severity} />}
+            <span className="font-mono text-xs text-[#9ca3af] truncate max-w-sm">
+              {incident?.title}
+            </span>
+          </div>
         </div>
-      </header>
 
-      <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col p-5 sm:p-8">
-        <div className="flex-1 space-y-5">
-          {messages.length === 0 && (
-            <div className="card p-5">
-              <div className="flex gap-3">
-                <Bot className="mt-0.5 h-5 w-5 shrink-0 text-[#168a52]" />
+        {incident && (
+          <Link
+            href={`/incidents/${incident.id}/report`}
+            className="btn-ghost text-xs py-1.5 px-3"
+          >
+            <FileText className="mr-1.5 h-3.5 w-3.5" />
+            Executive Report
+          </Link>
+        )}
+      </div>
 
+      {/* Messages Viewport */}
+      <div className="flex-1 space-y-4 overflow-y-auto">
+        {messages.length === 0 && (
+          <div className="card p-6 border-[#1f2937] bg-[#11161d]">
+            <div className="flex gap-3">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[#10b981]/30 bg-[#10b981]/10 text-[#10b981]">
+                <Bot className="h-4 w-4" />
+              </span>
+              <div className="space-y-3">
                 <div>
-                  <p className="text-sm leading-6 text-[#344054]">
-                    Ask questions about this incident. Answers cite available
-                    database evidence and label inferences separately.
+                  <h3 className="text-sm font-semibold text-[#f3f4f6]">
+                    Evidence-Grounded Threat Analyst
+                  </h3>
+                  <p className="mt-1 text-xs text-[#9ca3af] leading-relaxed">
+                    Ask questions regarding this incident. Answers are grounded in actual database logs,
+                    mapped to MITRE ATT&CK techniques, and cite retrieved playbooks.
                   </p>
+                </div>
 
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {SUGGESTIONS.map((question) => (
+                <div className="space-y-1.5 pt-1">
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-[#6b7280]">
+                    Recommended Inquiries:
+                  </span>
+                  <div className="flex flex-wrap gap-2">
+                    {SUGGESTIONS.map((q) => (
                       <button
-                        key={question}
-                        onClick={() => setInput(question)}
-                        className="btn-ghost !px-3 !py-1.5 !text-xs"
+                        key={q}
+                        type="button"
+                        onClick={() => send(q)}
+                        className="rounded-lg border border-[#1f2937] bg-[#171e28] px-3 py-1.5 text-xs text-[#9ca3af] hover:text-[#f3f4f6] hover:border-[#374151] transition text-left"
                       >
-                        {question}
+                        {q}
                       </button>
                     ))}
                   </div>
                 </div>
               </div>
             </div>
-          )}
-
-          {messages.map((message) => (
-            <Answer key={message.id} message={message} />
-          ))}
-
-          {sending && (
-            <div className="flex gap-3">
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#f0f8f4]">
-                <Bot className="h-4 w-4 text-[#168a52]" />
-              </span>
-
-              <div className="rounded-xl border border-[#e6e8eb] bg-white px-4 py-3 text-sm text-[#667085]">
-                Analyzing evidence…
-              </div>
-            </div>
-          )}
-
-          <div ref={bottom} />
-        </div>
-
-        <div className="sticky bottom-0 mt-5 border-t border-[#e6e8eb] bg-[#f7f8fa] pt-4">
-          <div className="flex gap-3">
-            <textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault()
-                  send()
-                }
-              }}
-              className="input min-h-[48px] flex-1 resize-none"
-              placeholder="Ask about this incident…"
-              rows={1}
-            />
-
-            <button
-              onClick={send}
-              disabled={!input.trim() || sending}
-              className="btn-primary self-end"
-              aria-label="Send message"
-            >
-              <Send className="h-4 w-4" />
-            </button>
           </div>
+        )}
 
-          <p className="mt-2 flex items-center gap-1 text-xs text-[#667085]">
-            <AlertCircle className="h-3.5 w-3.5" />
-            Enter sends; Shift + Enter adds a line.
-          </p>
+        {messages.map((m) => (
+          <Answer key={m.id} message={m} />
+        ))}
+
+        {sending && (
+          <div className="flex gap-3">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#10b981]/30 bg-[#10b981]/10 text-[#10b981]">
+              <Bot className="h-4 w-4" />
+            </span>
+            <div className="rounded-xl border border-[#1f2937] bg-[#11161d] px-4 py-3 text-xs text-[#9ca3af] flex items-center gap-2">
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-[#10b981]" />
+              Correlating evidence and synthesizing analysis…
+            </div>
+          </div>
+        )}
+
+        <div ref={bottom} />
+      </div>
+
+      {/* Sticky Chat Prompt Bar */}
+      <div className="sticky bottom-0 border-t border-[#1f2937] bg-[#0b0f14]/90 pt-3 pb-2 backdrop-blur-md">
+        <div className="flex gap-2">
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                send()
+              }
+            }}
+            placeholder="Ask AI Copilot about this incident (e.g. 'Identify lateral movement attempts')..."
+            rows={1}
+            className="input flex-1 min-h-[44px] resize-none font-sans text-xs py-2.5"
+          />
+
+          <button
+            type="button"
+            onClick={() => send()}
+            disabled={!input.trim() || sending}
+            className="btn-primary px-4 py-2 self-end disabled:opacity-30"
+          >
+            <Send className="h-4 w-4" />
+          </button>
         </div>
-      </main>
+
+        <p className="mt-1.5 flex items-center gap-1 font-mono text-[10px] text-[#6b7280]">
+          <AlertCircle className="h-3 w-3" />
+          Enter to send · Shift+Enter for newline · Grounded in verified telemetry
+        </p>
+      </div>
     </div>
   )
 }

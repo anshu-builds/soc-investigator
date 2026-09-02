@@ -216,6 +216,7 @@ def validate_url_ssrf(
     allow_loopback: bool = False,
     allowed_schemes: Tuple[str, ...] = ("http", "https"),
     resolve_dns: bool = True,
+    allowed_hosts: Optional[Set[str] | Tuple[str, ...]] = None,
 ) -> ValidatedURL:
     """Validate a destination URL against SSRF and network security policies.
 
@@ -258,9 +259,17 @@ def validate_url_ssrf(
 
     norm_hostname = clean_hostname.lower()
 
+    # Hostname allowlist check
+    if allowed_hosts is not None:
+        norm_allowed = {h.lower().rstrip(".") for h in allowed_hosts}
+        if norm_hostname not in norm_allowed:
+            raise SSRFSecurityError(
+                f"Hostname '{norm_hostname}' is not in the allowed hosts list: {sorted(norm_allowed)}"
+            )
+
     # Localhost alias check
     if norm_hostname in ("localhost", "ip6-localhost", "ip6-loopback", "localhost.localdomain"):
-        if not allow_loopback:
+        if not allow_loopback and (allowed_hosts is None or norm_hostname not in norm_allowed):
             raise SSRFSecurityError(f"Localhost alias '{norm_hostname}' is strictly prohibited")
 
     # 4. Port Validation
@@ -291,18 +300,27 @@ def validate_url_ssrf(
             try:
                 resolved_ips = resolve_all_ips(norm_hostname, port)
                 for ip in resolved_ips:
-                    allowed, reason = is_ip_allowed(
-                        ip, allow_private=allow_private, allow_loopback=allow_loopback
-                    )
-                    if not allowed:
-                        raise SSRFSecurityError(
-                            f"Hostname '{norm_hostname}' resolved to blocked IP {ip} ({reason})"
+                    # Cloud metadata endpoints are NEVER allowed under any circumstances
+                    normalized = extract_normalized_ip(ip)
+                    if str(normalized) in CLOUD_METADATA_IPS or str(ip) in CLOUD_METADATA_IPS:
+                        raise SSRFSecurityError(f"Cloud metadata endpoint is strictly prohibited ({normalized})")
+
+                    if not (allowed_hosts is not None and norm_hostname in norm_allowed):
+                        allowed, reason = is_ip_allowed(
+                            ip, allow_private=allow_private, allow_loopback=allow_loopback
                         )
+                        if not allowed:
+                            raise SSRFSecurityError(
+                                f"Hostname '{norm_hostname}' resolved to blocked IP {ip} ({reason})"
+                            )
             except SSRFResolutionError:
                 # In test or development environments, allow RFC test/local domains (.test, .local, .example)
                 # when mocked or intranet-bound, provided allow_private is enabled.
                 is_test_domain = norm_hostname.endswith((".test", ".example", ".invalid", ".local"))
                 if is_test_domain and allow_private:
+                    resolved_ips = []
+                elif allowed_hosts is not None and norm_hostname in norm_allowed:
+                    # For explicitly allowlisted trusted hosts, tolerate offline DNS resolution failure
                     resolved_ips = []
                 else:
                     raise
@@ -365,6 +383,8 @@ class SafeAsyncClient(httpx.AsyncClient):
         allow_private: bool = False,
         allow_loopback: bool = False,
         resolve_dns: Optional[bool] = None,
+        allowed_hosts: Optional[Set[str] | Tuple[str, ...]] = None,
+        allowed_schemes: Tuple[str, ...] = ("http", "https"),
         max_redirects: int = 3,
         max_response_size: int = 10 * 1024 * 1024,
         timeout: Optional[float | httpx.Timeout] = None,
@@ -372,6 +392,8 @@ class SafeAsyncClient(httpx.AsyncClient):
     ):
         self.allow_private = allow_private
         self.allow_loopback = allow_loopback
+        self.allowed_hosts = allowed_hosts
+        self.allowed_schemes = allowed_schemes
         self.max_redirects = max_redirects
         self.max_response_size = max_response_size
 
@@ -400,7 +422,9 @@ class SafeAsyncClient(httpx.AsyncClient):
             str(request.url),
             allow_private=self.allow_private,
             allow_loopback=self.allow_loopback,
+            allowed_schemes=self.allowed_schemes,
             resolve_dns=self.resolve_dns,
+            allowed_hosts=self.allowed_hosts,
         )
 
         redirects_followed = 0
@@ -426,7 +450,9 @@ class SafeAsyncClient(httpx.AsyncClient):
                 target_url,
                 allow_private=self.allow_private,
                 allow_loopback=self.allow_loopback,
+                allowed_schemes=self.allowed_schemes,
                 resolve_dns=self.resolve_dns,
+                allowed_hosts=self.allowed_hosts,
             )
 
             await response.aclose()

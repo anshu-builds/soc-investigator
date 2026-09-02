@@ -6,17 +6,58 @@ import type {
   IncidentListResponse,
   LogUploadResponse,
   MessageListResponse,
+  NLQueryResponse,
   ReportCreateResponse,
   ReportOut,
   SecurityEventListResponse,
   SessionCreateResponse,
+  UserSession,
+  WazuhPollResponse,
+  WazuhStatusResponse,
 } from './types'
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || ''
 
-function getToken(): string {
+export function getToken(): string {
   if (typeof window === 'undefined') return ''
   return localStorage.getItem('soc_token') || ''
+}
+
+export function parseJwt(token: string): UserSession | null {
+  try {
+    const parts = token.split('.')
+    if (parts.length !== 3) return null
+    let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/')
+    while (base64.length % 4) base64 += '='
+    const json = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    )
+    const payload = JSON.parse(json)
+    if (!payload.sub || !payload.exp) return null
+    return {
+      userId: String(payload.sub),
+      email: String(payload.email || 'analyst@soc.local'),
+      role: (payload.role || 'analyst').toLowerCase(),
+      exp: Number(payload.exp),
+    }
+  } catch {
+    return null
+  }
+}
+
+export function getCurrentUser(): UserSession | null {
+  const token = getToken()
+  if (!token) return null
+  const user = parseJwt(token)
+  if (!user) return null
+  if (user.exp * 1000 < Date.now()) {
+    logout()
+    return null
+  }
+  return user
 }
 
 async function request<T>(
@@ -91,6 +132,19 @@ export async function getMessages(sessionId: string): Promise<MessageListRespons
   return request<MessageListResponse>(`/api/sessions/${sessionId}/messages`)
 }
 
+export interface TTSResponse {
+  audio_clips_base64: string[]
+  content_type: string
+  chunk_count: number
+}
+
+export async function getMessageAudio(messageId: string, signal?: AbortSignal): Promise<TTSResponse> {
+  return request<TTSResponse>(`/api/messages/${messageId}/tts`, {
+    method: 'POST',
+    signal,
+  })
+}
+
 export async function uploadLogs(file: File, sourceName?: string): Promise<LogUploadResponse> {
   const token = getToken()
   const formData = new FormData()
@@ -162,4 +216,21 @@ export async function downloadReportFile(reportId: string): Promise<Blob> {
     throw new Error('Failed to download report')
   }
   return res.blob()
+}
+
+export async function getWazuhStatus(): Promise<WazuhStatusResponse> {
+  return request<WazuhStatusResponse>('/api/integrations/wazuh/status')
+}
+
+export async function triggerWazuhPoll(): Promise<WazuhPollResponse> {
+  return request<WazuhPollResponse>('/api/integrations/wazuh/poll', {
+    method: 'POST',
+  })
+}
+
+export async function sendNLQuery(question: string): Promise<NLQueryResponse> {
+  return request<NLQueryResponse>('/api/nlu/query', {
+    method: 'POST',
+    body: JSON.stringify({ question }),
+  })
 }

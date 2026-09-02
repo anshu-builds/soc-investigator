@@ -1,14 +1,24 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import React, { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { AlertTriangle, ChevronLeft, Download, FileText, Loader2, Printer } from 'lucide-react'
+import {
+  AlertTriangle,
+  ChevronLeft,
+  Download,
+  FileDown,
+  FileText,
+  Loader2,
+  Printer,
+  Shield,
+  Sparkles,
+} from 'lucide-react'
 import { format } from 'date-fns'
-import { createReport, getReport } from '@/lib/api'
+
+import { createReport, downloadReportFile, getReport } from '@/lib/api'
 import type { ReportOut } from '@/lib/types'
-import React, { Fragment, type ReactNode } from 'react'
 
 function renderWithEvidence(children: ReactNode): ReactNode {
   if (typeof children === 'string') {
@@ -18,7 +28,9 @@ function renderWithEvidence(children: ReactNode): ReactNode {
       <>
         {parts.map((part, i) =>
           /^\[EV-\d{3,}\]$/.test(part) ? (
-            <span key={i} className="evidence-chip">{part}</span>
+            <span key={i} className="evidence-chip">
+              {part}
+            </span>
           ) : (
             <Fragment key={i}>{part}</Fragment>
           )
@@ -38,6 +50,7 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
   const [report, setReport] = useState<ReportOut | null>(null)
   const [generating, setGenerating] = useState(false)
   const [downloadingPdf, setDownloadingPdf] = useState(false)
+  const [downloadingMd, setDownloadingMd] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [incidentId, setIncidentId] = useState('')
   const reportRef = useRef<HTMLElement>(null)
@@ -54,7 +67,7 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
       const created = await createReport(id, { format: 'MARKDOWN' })
       setReport(await getReport(created.report_id))
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Unable to generate report')
+      setError(e instanceof Error ? e.message : 'Unable to generate incident report')
     } finally {
       setGenerating(false)
     }
@@ -62,7 +75,6 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
 
   const downloadPdf = async () => {
     if (!reportRef.current || !report || downloadingPdf) return
-
     setDownloadingPdf(true)
     setError(null)
 
@@ -106,87 +118,169 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
 
       if (footer) footer.style.display = ''
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to generate PDF')
+      setError(e instanceof Error ? e.message : 'Failed to compile PDF document')
     } finally {
       setDownloadingPdf(false)
     }
   }
 
+  const downloadMarkdown = async () => {
+    if (!report || downloadingMd) return
+    setDownloadingMd(true)
+    setError(null)
+    try {
+      const blob = await downloadReportFile(report.id)
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `Incident_${report.incident_id}_Report.md`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      window.URL.revokeObjectURL(url)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to download report markdown')
+    } finally {
+      setDownloadingMd(false)
+    }
+  }
+
   return (
-    <div className="mx-auto max-w-4xl p-5 sm:p-8">
-      <div className="flex flex-wrap items-center justify-between gap-4 print:hidden">
+    <div className="mx-auto max-w-4xl space-y-6">
+      {/* Top Controls Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#1f2937] pb-4 print:hidden">
         <div>
           <Link
             href={`/incidents/${incidentId}`}
-            className="inline-flex items-center text-sm text-[#667085] hover:text-[#111827]"
+            className="inline-flex items-center text-xs font-mono text-[#9ca3af] hover:text-[#f3f4f6] transition-colors"
           >
-            <ChevronLeft className="mr-1 h-4 w-4" />Incident
+            <ChevronLeft className="mr-1 h-3.5 w-3.5" /> Back to Incident Workspace
           </Link>
-          <h1 className="mt-2 text-2xl font-semibold tracking-[-.02em] text-[#111827]">
-            Incident report
-          </h1>
+          <div className="mt-1 flex items-center gap-2">
+            <h1 className="text-lg font-bold tracking-tight text-[#f3f4f6]">
+              Executive Incident Report
+            </h1>
+            <span className="font-mono text-xs text-[#9ca3af]">({incidentId.slice(0, 8)})</span>
+          </div>
           {report && (
-            <p className="mt-1 text-sm text-[#667085]">
+            <p className="mt-0.5 font-mono text-[11px] text-[#6b7280]">
               Generated {format(new Date(report.generated_at), 'yyyy-MM-dd HH:mm')} UTC
             </p>
           )}
         </div>
-        <div className="flex gap-2">
+
+        <div className="flex flex-wrap items-center gap-2">
           {report && (
             <>
               <button
+                type="button"
                 onClick={downloadPdf}
                 disabled={downloadingPdf}
-                className="btn-ghost"
+                className="btn-ghost text-xs py-1.5 px-3"
               >
                 {downloadingPdf ? (
-                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Generating PDF…</>
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin text-[#10b981]" />
                 ) : (
-                  <><Download className="mr-2 h-4 w-4" />Download PDF</>
+                  <Download className="mr-1.5 h-3.5 w-3.5" />
                 )}
+                <span>{downloadingPdf ? 'Exporting PDF…' : 'Download PDF'}</span>
               </button>
-              <button onClick={() => window.print()} className="btn-ghost">
-                <Printer className="mr-2 h-4 w-4" />Print / PDF
+
+              <button
+                type="button"
+                onClick={downloadMarkdown}
+                disabled={downloadingMd}
+                className="btn-ghost text-xs py-1.5 px-3"
+                title="Download raw Markdown report"
+              >
+                {downloadingMd ? (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin text-[#10b981]" />
+                ) : (
+                  <FileDown className="mr-1.5 h-3.5 w-3.5" />
+                )}
+                <span>Markdown</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="btn-ghost text-xs py-1.5 px-3"
+              >
+                <Printer className="mr-1.5 h-3.5 w-3.5" />
+                <span>Print</span>
               </button>
             </>
           )}
-          <button onClick={generate} disabled={generating} className="btn-primary">
+
+          <button
+            type="button"
+            onClick={generate}
+            disabled={generating}
+            className="btn-primary text-xs py-1.5 px-3"
+          >
             {generating ? (
-              <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Generating</>
+              <>
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                Synthesizing…
+              </>
             ) : (
-              <><FileText className="mr-2 h-4 w-4" />{report ? 'Regenerate' : 'Generate report'}</>
+              <>
+                <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+                {report ? 'Regenerate Report' : 'Compile Executive Report'}
+              </>
             )}
           </button>
         </div>
       </div>
 
       {error && (
-        <div className="mt-5 flex gap-3 rounded-xl border border-[#fecaca] bg-[#fef2f2] p-4 text-sm text-[#b42318] print:hidden">
-          <AlertTriangle className="h-5 w-5 shrink-0" />{error}
+        <div className="flex gap-3 rounded-lg border border-[#7f1d1d] bg-[#450a0a]/50 p-4 text-xs text-[#fca5a5] print:hidden">
+          <AlertTriangle className="h-4 w-4 shrink-0 text-[#ef4444]" />
+          <span>{error}</span>
         </div>
       )}
 
+      {/* Initial Empty State */}
       {!report && !generating && (
-        <div className="card mt-6 p-12 text-center print:hidden">
-          <FileText className="mx-auto h-9 w-9 text-[#667085]" />
-          <p className="mt-3 text-sm font-medium text-[#111827]">No report generated</p>
-          <p className="mt-1 text-sm text-[#667085]">
-            Create an evidence-based incident report when you are ready.
+        <div className="card p-12 text-center border-[#1f2937] bg-[#11161d] print:hidden">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl border border-[#1f2937] bg-[#171e28] text-[#9ca3af]">
+            <FileText className="h-6 w-6 text-[#10b981]" />
+          </div>
+          <h2 className="mt-4 text-sm font-semibold text-[#f3f4f6]">
+            No Executive Report Generated
+          </h2>
+          <p className="mt-1 max-w-md mx-auto text-xs text-[#9ca3af] leading-relaxed">
+            Generate a standardized executive briefing combining chronological telemetry,
+            verified MITRE ATT&CK tactics, and actionable containment recommendations.
+          </p>
+          <button
+            type="button"
+            onClick={generate}
+            className="btn-primary mt-5 text-xs py-2 px-4 inline-flex items-center gap-1.5"
+          >
+            <Sparkles className="h-3.5 w-3.5" /> Compile Executive Report
+          </button>
+        </div>
+      )}
+
+      {/* Loading Progress State */}
+      {generating && (
+        <div className="card p-12 text-center border-[#1f2937] bg-[#11161d] print:hidden space-y-3">
+          <Loader2 className="mx-auto h-7 w-7 animate-spin text-[#10b981]" />
+          <h3 className="text-sm font-semibold text-[#f3f4f6]">
+            Assembling Incident Artifacts & Telemetry
+          </h3>
+          <p className="text-xs text-[#9ca3af] max-w-sm mx-auto">
+            Correlating evidence, mapping MITRE techniques, and structuring forensic findings…
           </p>
         </div>
       )}
 
-      {generating && (
-        <div className="card mt-6 p-12 text-center text-sm text-[#667085] print:hidden">
-          <Loader2 className="mx-auto mb-3 h-6 w-6 animate-spin text-[#168a52]" />
-          Assembling incident data…
-        </div>
-      )}
-
+      {/* Report Document Presentation */}
       {report && (
         <article
           ref={reportRef}
-          className="incident-report card mt-6 p-6 sm:p-8 print:mt-0 print:border-none print:shadow-none print:p-0"
+          className="incident-report card p-6 sm:p-8 border-[#1f2937] bg-[#11161d] print:border-none print:shadow-none print:p-0 print:bg-white text-xs leading-relaxed"
         >
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
@@ -245,14 +339,14 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
                     href={safeHref}
                     target={isExternal ? '_blank' : undefined}
                     rel={isExternal ? 'noopener noreferrer' : undefined}
-                    className="text-[#168a52] underline hover:text-[#116e41]"
+                    className="text-[#10b981] underline hover:text-[#34d399]"
                   >
                     {children}
                   </a>
                 )
               },
               img: ({ alt }) => (
-                <span className="inline-block rounded bg-[#f3f4f6] px-2 py-1 text-xs text-[#667085] font-mono">
+                <span className="inline-block rounded bg-[#171e28] border border-[#1f2937] px-2 py-1 text-[10px] text-[#9ca3af] font-mono">
                   [{alt ? String(alt) : 'Image'} (external media blocked)]
                 </span>
               ),
@@ -273,7 +367,7 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
 
           <div className="ir-print-footer">
             <p>SOC Investigator · Incident ID: {report.incident_id}</p>
-            <p>Confidential — Security Investigation Report</p>
+            <p>Confidential — Security Operations Forensics & Incident Response Report</p>
           </div>
         </article>
       )}

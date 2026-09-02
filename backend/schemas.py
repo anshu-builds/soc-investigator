@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Annotated, Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -150,6 +150,14 @@ class ChatResponse(BaseModel):
 class MessageListResponse(BaseModel):
     session_id: uuid.UUID
     messages: List[ChatMessageOut]
+
+
+class TTSResponse(BaseModel):
+    """Bounded audio payload returned for a persisted assistant message."""
+
+    audio_clips_base64: List[Annotated[str, Field(min_length=1, max_length=2_666_668)]] = Field(..., min_length=1, max_length=3)
+    content_type: str = "audio/wav"
+    chunk_count: int = Field(..., ge=1, le=3)
 
 
 class ReportRequest(BaseModel):

@@ -112,7 +112,7 @@ export function InvestigationReport({
                 href={safeHref}
                 target={isExternal ? '_blank' : undefined}
                 rel={isExternal ? 'noopener noreferrer' : undefined}
-                className="text-[#168a52] underline hover:text-[#116e41]"
+                className="text-[#10b981] underline hover:text-[#34d399]"
               >
                 {children}
               </a>

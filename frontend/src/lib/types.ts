@@ -127,9 +127,13 @@ export interface ChatMessage {
   content: string
   evidence_ids?: string[]
   rag_chunks_used?: RagChunk[]
+  mitre_references?: string[]
+  rag_sources?: string[]
   answer_type?: 'FACTUAL' | 'INFERENCE' | 'RECOMMENDATION' | 'CANNOT_DETERMINE'
   ai_confidence?: number
   timestamp: string
+  /** UI-only marker: only backend-persisted assistant messages may use TTS. */
+  isPersisted?: boolean
 }
 
 export interface RagChunk {
@@ -195,4 +199,57 @@ export interface ReportOut {
   content: string
   ai_summary?: string
   recommended_actions?: string[]
+}
+
+export interface UserSession {
+  userId: string
+  email: string
+  role: 'admin' | 'lead_analyst' | 'analyst'
+  exp: number
+}
+
+export interface WazuhPollingStatus {
+  enabled: boolean
+  configured: boolean
+  api_url: string | null
+  verify_ssl: boolean
+  running: boolean
+  watermark: string | null
+  last_attempted_poll: string | null
+  last_successful_poll: string | null
+  total_alerts_fetched: number
+  total_alerts_processed: number
+  total_duplicates: number
+  consecutive_errors: number
+  last_error: string | null
+}
+
+export interface WazuhStatusResponse {
+  status: string
+  authentication: string
+  dedup_cache_size: number
+  api_polling: WazuhPollingStatus
+}
+
+export interface WazuhPollResponse {
+  status: string
+  fetched: number
+  processed: number
+  duplicates: number
+  watermark: string | null
+  errors: string[]
+}
+
+export interface NLQueryRequest {
+  question: string
+}
+
+export interface NLQueryResponse {
+  answer: string
+  needs_clarification: boolean
+  clarification_question?: string | null
+  clarification_options: string[]
+  result_count: number
+  resolved_intent?: string | null
+  resolved_filters?: Record<string, any> | null
 }

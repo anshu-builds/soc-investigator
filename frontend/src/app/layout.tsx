@@ -1,11 +1,11 @@
 import type { Metadata } from 'next'
 import './globals.css'
-import { Sidebar } from '@/components/layout/Sidebar'
+import { AppShell } from '@/components/layout/AppShell'
 
 export const metadata: Metadata = {
-  title: 'SOC Investigator',
+  title: 'SOC Investigator | Enterprise SIEM & Incident Response',
   description: 'Evidence-grounded conversational Security Operations Center investigation platform',
-  keywords: ['SOC', 'security', 'incident response', 'threat detection', 'MITRE ATT&CK'],
+  keywords: ['SOC', 'security', 'incident response', 'threat detection', 'MITRE ATT&CK', 'SIEM'],
   icons: {
     icon: '/icon.svg',
   },
@@ -17,7 +17,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
+    <html lang="en" className="dark">
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
@@ -26,20 +26,9 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className="antialiased">
+      <body className="antialiased bg-[#0b0f14] text-[#f3f4f6]">
         <AppShell>{children}</AppShell>
       </body>
     </html>
-  )
-}
-
-function AppShell({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="min-h-screen bg-[#f7f8fa]">
-      <Sidebar />
-      <main className="min-h-screen pl-64">
-        {children}
-      </main>
-    </div>
   )
 }
