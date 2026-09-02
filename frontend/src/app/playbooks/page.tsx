@@ -3,23 +3,36 @@
 import React, { useState } from 'react'
 import Link from 'next/link'
 import {
+  AlertCircle,
   AlertTriangle,
+  ArrowRight,
   BookOpen,
   Check,
+  CheckCircle2,
   ChevronRight,
   Clock,
   Copy,
   ExternalLink,
+  FileCheck,
+  FileText,
   Flame,
+  Info,
+  Layers,
+  ListOrdered,
   Lock,
   Search,
   Shield,
+  ShieldAlert,
   Sparkles,
   Terminal,
+  UserCheck,
   Wifi,
+  X,
   Zap,
 } from 'lucide-react'
+
 import { MitreTechniqueChip } from '@/components/ui/badges'
+import { useToast } from '@/components/ui/Toast'
 
 interface PlaybookData {
   id: string
@@ -90,7 +103,7 @@ const PLAYBOOKS: PlaybookData[] = [
       },
     ],
     containmentActions: [
-      'Block the attacking IP at the firewall / WAF immediately.',
+      'Block the attacking IP at the edge firewall / WAF immediately.',
       'Lock the targeted account temporarily if attacks are ongoing.',
       'Alert the account owner if attacks were successful.',
       'Enable Multi-Factor Authentication (MFA) on the targeted account if not enrolled.',
@@ -361,139 +374,300 @@ const PLAYBOOKS: PlaybookData[] = [
   },
 ]
 
+const CATEGORIES = [
+  'All Categories',
+  'Credential Access',
+  'Initial Access',
+  'Privilege Escalation',
+  'Lateral Movement',
+]
+
 export default function PlaybooksPage() {
+  const { success } = useToast()
+
   const [selectedId, setSelectedId] = useState<string>(PLAYBOOKS[0].id)
   const [search, setSearch] = useState('')
+  const [selectedCategory, setSelectedCategory] = useState('All Categories')
   const [copied, setCopied] = useState(false)
 
   const activePlaybook = PLAYBOOKS.find((p) => p.id === selectedId) || PLAYBOOKS[0]
 
   const filteredPlaybooks = PLAYBOOKS.filter((p) => {
+    // Category filter
+    if (selectedCategory !== 'All Categories' && p.category !== selectedCategory) {
+      return false
+    }
+
+    // Search query filter
     if (!search.trim()) return true
     const q = search.toLowerCase()
     return (
       p.title.toLowerCase().includes(q) ||
       p.category.toLowerCase().includes(q) ||
       p.attackType.toLowerCase().includes(q) ||
-      p.mitreTechniques.some((t) => t.id.toLowerCase().includes(q) || (t.name || '').toLowerCase().includes(q))
+      p.overview.toLowerCase().includes(q) ||
+      p.indicators.some((ind) => ind.toLowerCase().includes(q)) ||
+      p.containmentActions.some((act) => act.toLowerCase().includes(q)) ||
+      p.mitreTechniques.some(
+        (t) => t.id.toLowerCase().includes(q) || (t.name || '').toLowerCase().includes(q)
+      )
     )
   })
 
   const copyPlaybook = () => {
-    const text = `# ${activePlaybook.title}\n\nOverview:\n${activePlaybook.overview}\n\nContainment Actions:\n${activePlaybook.containmentActions.map((a, i) => `${i + 1}. ${a}`).join('\n')}`
+    const text = `# ${activePlaybook.title} (SOP)
+Category: ${activePlaybook.category}
+Attack Type: ${activePlaybook.attackType}
+Mode: Analyst-Guided Procedure
+
+## Threat Overview
+${activePlaybook.overview}
+
+## Detection Indicators
+${activePlaybook.indicators.map((i) => `- ${i}`).join('\n')}
+
+## Triage & Investigation Steps
+${activePlaybook.investigationSteps
+  .map(
+    (step, idx) =>
+      `Step ${idx + 1}: ${step.step}\n${step.details.map((d) => `  * ${d}`).join('\n')}`
+  )
+  .join('\n\n')}
+
+## Mandatory Containment Actions
+${activePlaybook.containmentActions.map((a, i) => `${i + 1}. ${a}`).join('\n')}
+
+## Forensic Evidence Checklist
+${activePlaybook.evidenceToCollect.map((e) => `- ${e}`).join('\n')}
+
+## Escalation Thresholds
+${activePlaybook.escalationCriteria.map((c) => `- ${c}`).join('\n')}`
+
     navigator.clipboard.writeText(text)
     setCopied(true)
+    success('Copied SOP to Clipboard', `${activePlaybook.title} procedure copied`)
     setTimeout(() => setCopied(false), 2000)
   }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#1f2937] pb-5">
+      {/* Top Header */}
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-5">
         <div>
-          <h1 className="text-xl font-bold tracking-tight text-[#f3f4f6]">
-            Incident Response Playbook Library
-          </h1>
-          <p className="mt-1 text-xs text-[#9ca3af]">
-            MITRE ATT&CK-aligned investigation, containment, and eradication procedures
+          <div className="flex items-center gap-3">
+            <h1 className="text-xl font-bold tracking-tight text-ink-primary">
+              SOC Incident Response Playbooks
+            </h1>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-elevated px-2.5 py-0.5 font-mono text-[11px] text-ink-secondary">
+              <BookOpen className="h-3 w-3 text-accent-emerald" />
+              <span>{PLAYBOOKS.length} Standard Operating Procedures</span>
+            </span>
+          </div>
+          <p className="mt-1 text-xs text-ink-secondary leading-relaxed">
+            MITRE ATT&CK-aligned investigation checklists, containment protocols, and evidence preservation guidelines.
           </p>
         </div>
 
-        <Link href="/incidents" className="btn-primary text-xs py-1.5 px-3">
-          <Shield className="mr-1.5 h-3.5 w-3.5" />
-          Triage Incidents
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href="/incidents" className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5">
+            <Shield className="h-3.5 w-3.5" />
+            <span>Incident Queue</span>
+          </Link>
+        </div>
       </div>
 
-      {/* Main Two-Column Layout */}
-      <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
-        {/* Left: Playbook Selector */}
-        <div className="space-y-3">
+      {/* Main Two-Column Library Layout */}
+      <div className="grid gap-6 lg:grid-cols-[330px_1fr]">
+        {/* Left Column: Playbook Selector & Filters */}
+        <div className="space-y-3.5">
+          {/* Search Box */}
           <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#6b7280]" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-muted" />
             <input
               type="text"
-              placeholder="Search playbooks or MITRE ID..."
+              placeholder="Search playbooks, MITRE ID..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="input w-full pl-9 font-mono text-xs"
+              className="input w-full pl-9 pr-7 font-mono text-xs"
             />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-muted hover:text-ink-primary"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
           </div>
 
-          <div className="space-y-2">
-            {filteredPlaybooks.map((pb) => {
-              const isSelected = pb.id === selectedId
+          {/* Category Filter Chips */}
+          <div className="flex flex-wrap gap-1.5 pb-1">
+            {CATEGORIES.map((cat) => {
+              const count =
+                cat === 'All Categories'
+                  ? PLAYBOOKS.length
+                  : PLAYBOOKS.filter((p) => p.category === cat).length
+              const isActive = selectedCategory === cat
               return (
                 <button
-                  key={pb.id}
+                  key={cat}
                   type="button"
-                  onClick={() => setSelectedId(pb.id)}
-                  className={`w-full text-left rounded-xl border p-3.5 transition ${
-                    isSelected
-                      ? 'border-[#10b981] bg-[#171e28] shadow-sm'
-                      : 'border-[#1f2937] bg-[#11161d] hover:border-[#374151] hover:bg-[#141b24]'
+                  onClick={() => setSelectedCategory(cat)}
+                  className={`rounded-lg px-2 py-1 text-[11px] font-mono transition ${
+                    isActive
+                      ? 'bg-elevated text-ink-primary font-bold border border-border-active shadow-sm'
+                      : 'text-ink-muted hover:text-ink-primary hover:bg-elevated/40'
                   }`}
                 >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-mono text-[10px] uppercase text-[#10b981] font-semibold">
-                      {pb.category}
-                    </span>
-                    <ChevronRight className={`h-3.5 w-3.5 ${isSelected ? 'text-[#10b981]' : 'text-[#6b7280]'}`} />
-                  </div>
-                  <h3 className="mt-1 text-xs font-semibold text-[#f3f4f6] line-clamp-1">
-                    {pb.title}
-                  </h3>
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {pb.mitreTechniques.slice(0, 2).map((t) => (
-                      <span
-                        key={t.id}
-                        className="rounded bg-[#0b0f14] px-1.5 py-0.5 font-mono text-[10px] text-[#9ca3af] border border-[#1f2937]"
-                      >
-                        {t.id}
-                      </span>
-                    ))}
-                  </div>
+                  <span>{cat}</span>
+                  <span className="ml-1 text-[10px] text-ink-muted font-normal">({count})</span>
                 </button>
               )
             })}
           </div>
+
+          {/* Playbook List Cards */}
+          <div className="space-y-2">
+            {filteredPlaybooks.length === 0 ? (
+              <div className="card p-6 text-center border-border-subtle bg-panel space-y-2">
+                <Info className="mx-auto h-5 w-5 text-ink-muted" />
+                <p className="text-xs text-ink-secondary">No playbooks match filter criteria</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearch('')
+                    setSelectedCategory('All Categories')
+                  }}
+                  className="text-xs text-accent-emerald hover:underline font-mono"
+                >
+                  Reset filters
+                </button>
+              </div>
+            ) : (
+              filteredPlaybooks.map((pb) => {
+                const isSelected = pb.id === selectedId
+                return (
+                  <button
+                    key={pb.id}
+                    type="button"
+                    tabIndex={0}
+                    onClick={() => setSelectedId(pb.id)}
+                    className={`w-full text-left rounded-xl border p-3.5 transition group ${
+                      isSelected
+                        ? 'border-accent-emerald bg-elevated shadow-sm'
+                        : 'border-border bg-panel hover:border-border-active hover:bg-elevated/50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono text-[10px] uppercase text-accent-emerald font-semibold">
+                        {pb.category}
+                      </span>
+                      <ChevronRight
+                        className={`h-3.5 w-3.5 transition-transform ${
+                          isSelected
+                            ? 'text-accent-emerald translate-x-0.5'
+                            : 'text-ink-muted group-hover:text-ink-primary'
+                        }`}
+                      />
+                    </div>
+
+                    <h3 className="mt-1 text-xs font-bold text-ink-primary line-clamp-1 group-hover:text-accent-emerald transition-colors">
+                      {pb.title}
+                    </h3>
+
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] font-mono text-ink-muted">
+                      <span>{pb.investigationSteps.length} Steps</span>
+                      <span>·</span>
+                      <span>{pb.containmentActions.length} Actions</span>
+                    </div>
+
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {pb.mitreTechniques.slice(0, 2).map((t) => (
+                        <span
+                          key={t.id}
+                          className="rounded bg-canvas px-1.5 py-0.5 font-mono text-[10px] text-ink-secondary border border-border-subtle"
+                        >
+                          {t.id}
+                        </span>
+                      ))}
+                      {pb.mitreTechniques.length > 2 && (
+                        <span className="text-[10px] text-ink-muted self-center">
+                          +{pb.mitreTechniques.length - 2}
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                )
+              })
+            )}
+          </div>
         </div>
 
-        {/* Right: Active Playbook Reader */}
-        <div className="card p-6 border-[#1f2937] bg-[#11161d] space-y-6">
-          {/* Header */}
-          <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[#1f2937] pb-4">
+        {/* Right Column: Active Playbook Reader Dossier */}
+        <div className="card p-6 sm:p-7 border-border bg-panel space-y-6 shadow-sm">
+          {/* Header Strip */}
+          <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border-subtle pb-5">
             <div className="space-y-2">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded border border-[#10b981]/30 bg-[#10b981]/10 px-2 py-0.5 font-mono text-[10px] font-semibold uppercase text-[#34d399]">
+                <span className="rounded-md border border-accent-emerald/30 bg-accent-emerald/10 px-2 py-0.5 font-mono text-[10px] font-bold uppercase text-accent-emerald">
                   {activePlaybook.category}
                 </span>
-                <span className="rounded border border-[#1f2937] bg-[#171e28] px-2 py-0.5 font-mono text-[10px] text-[#9ca3af]">
+                <span className="rounded-md border border-border bg-elevated px-2 py-0.5 font-mono text-[10px] text-ink-secondary">
                   Type: {activePlaybook.attackType}
                 </span>
+                <span className="rounded-md border border-border-subtle bg-canvas px-2 py-0.5 font-mono text-[10px] text-ink-muted flex items-center gap-1">
+                  <UserCheck className="h-3 w-3 text-accent-emerald" />
+                  <span>Analyst-Guided Procedure</span>
+                </span>
               </div>
-              <h2 className="text-lg font-bold text-[#f3f4f6]">
+
+              <h2 className="text-xl font-bold tracking-tight text-ink-primary">
                 {activePlaybook.title}
               </h2>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={copyPlaybook}
-                className="btn-ghost text-xs py-1.5 px-3"
+                className="btn-ghost text-xs py-1.5 px-3 flex items-center gap-1.5"
+                title="Copy full standard operating procedure to clipboard"
               >
-                {copied ? <Check className="mr-1.5 h-3.5 w-3.5 text-[#10b981]" /> : <Copy className="mr-1.5 h-3.5 w-3.5" />}
-                <span>{copied ? 'Copied' : 'Copy Playbook'}</span>
+                {copied ? (
+                  <>
+                    <Check className="h-3.5 w-3.5 text-accent-emerald" />
+                    <span className="text-accent-emerald">Copied</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-3.5 w-3.5" />
+                    <span>Copy SOP</span>
+                  </>
+                )}
               </button>
+
+              <Link
+                href="/incidents"
+                className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5"
+                title="Triage incidents matching this attack vector"
+              >
+                <ShieldAlert className="h-3.5 w-3.5" />
+                <span>Triage Incidents</span>
+              </Link>
             </div>
           </div>
 
-          {/* MITRE Mapping Bar */}
-          <div className="rounded-lg border border-[#1f2937] bg-[#0b0f14] p-3.5">
-            <span className="font-mono text-[10px] uppercase text-[#6b7280] font-semibold block mb-2">
-              Mapped MITRE ATT&CK Techniques:
-            </span>
+          {/* MITRE ATT&CK Framework Mapping Strip */}
+          <div className="rounded-xl border border-border bg-canvas/70 p-4 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="font-mono text-[10px] uppercase text-ink-muted font-bold tracking-wider">
+                Mapped MITRE ATT&CK Framework Techniques
+              </span>
+              <span className="text-[10px] text-ink-muted font-mono">
+                Authoritative Reference
+              </span>
+            </div>
             <div className="flex flex-wrap gap-2">
               {activePlaybook.mitreTechniques.map((t) => (
                 <MitreTechniqueChip
@@ -506,44 +680,56 @@ export default function PlaybooksPage() {
             </div>
           </div>
 
-          {/* Overview */}
+          {/* Overview & Threat Context */}
           <div className="space-y-1.5">
-            <h4 className="font-mono text-xs uppercase font-semibold text-[#10b981]">
-              Overview & Threat Context
-            </h4>
-            <p className="text-xs text-[#d1d5db] leading-relaxed">
+            <h3 className="font-mono text-xs uppercase font-bold text-accent-emerald flex items-center gap-1.5 tracking-wide">
+              <Info className="h-3.5 w-3.5" />
+              <span>Threat Context & Overview</span>
+            </h3>
+            <p className="text-xs text-ink-secondary leading-relaxed bg-elevated/40 p-4 rounded-xl border border-border-subtle">
               {activePlaybook.overview}
             </p>
           </div>
 
           {/* Detection Indicators */}
           <div className="space-y-2">
-            <h4 className="font-mono text-xs uppercase font-semibold text-[#facc15] flex items-center gap-1.5">
+            <h3 className="font-mono text-xs uppercase font-bold text-[#facc15] flex items-center gap-1.5 tracking-wide">
               <AlertTriangle className="h-3.5 w-3.5" />
-              Detection Indicators
-            </h4>
-            <ul className="space-y-1.5 pl-4 text-xs text-[#9ca3af] list-disc">
-              {activePlaybook.indicators.map((ind, idx) => (
-                <li key={idx} className="leading-relaxed">{ind}</li>
-              ))}
-            </ul>
+              <span>Detection Signatures & Telemetry Triggers</span>
+            </h3>
+            <div className="rounded-xl border border-[#713f12]/30 bg-[#422006]/20 p-4">
+              <ul className="space-y-2 text-xs text-ink-primary">
+                {activePlaybook.indicators.map((ind, idx) => (
+                  <li key={idx} className="flex items-start gap-2.5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-[#facc15] mt-1.5 shrink-0" />
+                    <span className="leading-relaxed font-sans">{ind}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
 
-          {/* Triage / Investigation Steps */}
-          <div className="space-y-3 border-t border-[#1f2937] pt-4">
-            <h4 className="font-mono text-xs uppercase font-semibold text-[#38bdf8] flex items-center gap-1.5">
+          {/* Triage & Forensic Investigation Steps */}
+          <div className="space-y-3 border-t border-border-subtle pt-5">
+            <h3 className="font-mono text-xs uppercase font-bold text-accent-cyan flex items-center gap-1.5 tracking-wide">
               <Terminal className="h-3.5 w-3.5" />
-              Triage & Forensic Steps
-            </h4>
+              <span>Triage & Forensic Investigation Protocol</span>
+            </h3>
             <div className="grid gap-3 sm:grid-cols-2">
               {activePlaybook.investigationSteps.map((step, idx) => (
-                <div key={idx} className="rounded-lg border border-[#1f2937] bg-[#141b24] p-3.5 space-y-1.5">
-                  <span className="font-mono text-xs font-semibold text-[#f3f4f6] block">
+                <div
+                  key={idx}
+                  className="rounded-xl border border-border bg-elevated/40 p-4 space-y-2"
+                >
+                  <span className="font-mono text-xs font-bold text-ink-primary block border-b border-border-subtle pb-1.5">
                     Step {idx + 1}: {step.step}
                   </span>
-                  <ul className="space-y-1 pl-3 text-xs text-[#9ca3af] list-disc">
+                  <ul className="space-y-1.5 text-xs text-ink-secondary">
                     {step.details.map((d, dIdx) => (
-                      <li key={dIdx} className="leading-relaxed">{d}</li>
+                      <li key={dIdx} className="flex items-start gap-2">
+                        <span className="text-accent-cyan mt-0.5">•</span>
+                        <span className="leading-relaxed">{d}</span>
+                      </li>
                     ))}
                   </ul>
                 </div>
@@ -551,45 +737,79 @@ export default function PlaybooksPage() {
             </div>
           </div>
 
-          {/* Containment Actions */}
-          <div className="space-y-2 border-t border-[#1f2937] pt-4">
-            <h4 className="font-mono text-xs uppercase font-semibold text-[#f87171] flex items-center gap-1.5">
-              <Lock className="h-3.5 w-3.5" />
-              Mandatory Containment Actions
-            </h4>
-            <ol className="space-y-2 pl-4 text-xs text-[#d1d5db] list-decimal font-mono">
-              {activePlaybook.containmentActions.map((action, idx) => (
-                <li key={idx} className="leading-relaxed pl-1">
-                  {action}
-                </li>
-              ))}
-            </ol>
+          {/* Mandatory Containment Actions */}
+          <div className="space-y-3 border-t border-border-subtle pt-5">
+            <div className="flex items-center justify-between">
+              <h3 className="font-mono text-xs uppercase font-bold text-severity-critical flex items-center gap-1.5 tracking-wide">
+                <Lock className="h-3.5 w-3.5" />
+                <span>Mandatory Threat Containment Actions</span>
+              </h3>
+              <span className="text-[10px] font-mono font-bold uppercase text-severity-critical bg-severity-critical/10 px-2 py-0.5 rounded border border-severity-critical/30">
+                Action Required
+              </span>
+            </div>
+            <div className="rounded-xl border border-severity-critical/30 bg-severity-critical/10 p-4">
+              <ol className="space-y-2.5 font-mono text-xs text-ink-primary">
+                {activePlaybook.containmentActions.map((action, idx) => (
+                  <li key={idx} className="flex items-start gap-3">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-severity-critical/20 border border-severity-critical/40 text-[10px] font-bold text-severity-critical">
+                      {idx + 1}
+                    </span>
+                    <span className="leading-relaxed font-sans mt-0.5">{action}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
           </div>
 
-          {/* Evidence to Collect & Escalation */}
-          <div className="grid gap-4 sm:grid-cols-2 border-t border-[#1f2937] pt-4">
-            <div className="space-y-2">
-              <span className="font-mono text-xs font-semibold text-[#9ca3af] block">
-                Forensic Evidence Checklist
+          {/* Forensic Evidence Checklist & Escalation Thresholds */}
+          <div className="grid gap-4 sm:grid-cols-2 border-t border-border-subtle pt-5">
+            {/* Evidence Checklist */}
+            <div className="rounded-xl border border-border bg-elevated/30 p-4 space-y-2.5">
+              <span className="font-mono text-xs font-bold text-ink-primary block flex items-center gap-1.5">
+                <FileCheck className="h-3.5 w-3.5 text-accent-emerald" />
+                <span>Forensic Evidence Preservation</span>
               </span>
-              <ul className="space-y-1 pl-3 text-xs text-[#6b7280] list-disc">
+              <ul className="space-y-1.5 text-xs text-ink-secondary">
                 {activePlaybook.evidenceToCollect.map((ev, idx) => (
-                  <li key={idx}>{ev}</li>
+                  <li key={idx} className="flex items-start gap-2">
+                    <span className="text-accent-emerald mt-0.5">✓</span>
+                    <span className="leading-relaxed">{ev}</span>
+                  </li>
                 ))}
               </ul>
             </div>
 
-            <div className="space-y-2">
-              <span className="font-mono text-xs font-semibold text-[#f87171] block">
-                Escalation Thresholds
+            {/* Escalation Thresholds */}
+            <div className="rounded-xl border border-border bg-elevated/30 p-4 space-y-2.5">
+              <span className="font-mono text-xs font-bold text-severity-critical block flex items-center gap-1.5">
+                <AlertCircle className="h-3.5 w-3.5 text-severity-critical" />
+                <span>Escalation Thresholds</span>
               </span>
-              <ul className="space-y-1 pl-3 text-xs text-[#6b7280] list-disc">
+              <ul className="space-y-1.5 text-xs text-ink-secondary">
                 {activePlaybook.escalationCriteria.map((esc, idx) => (
-                  <li key={idx}>{esc}</li>
+                  <li key={idx} className="flex items-start gap-2">
+                    <span className="text-severity-critical mt-0.5">▲</span>
+                    <span className="leading-relaxed">{esc}</span>
+                  </li>
                 ))}
               </ul>
             </div>
           </div>
+
+          {/* False Positive Guidance if provided */}
+          {activePlaybook.falsePositives && activePlaybook.falsePositives.length > 0 && (
+            <div className="border-t border-border-subtle pt-4 space-y-2">
+              <span className="font-mono text-xs font-bold text-ink-muted uppercase tracking-wider block">
+                Known Benign Patterns / False Positives
+              </span>
+              <ul className="space-y-1 pl-3 text-xs text-ink-secondary list-disc">
+                {activePlaybook.falsePositives.map((fp, idx) => (
+                  <li key={idx} className="leading-relaxed">{fp}</li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       </div>
     </div>

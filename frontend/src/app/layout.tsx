@@ -26,7 +26,7 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className="antialiased bg-[#0b0f14] text-[#f3f4f6]">
+      <body className="antialiased bg-canvas text-ink-primary">
         <AppShell>{children}</AppShell>
       </body>
     </html>

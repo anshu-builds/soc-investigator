@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
+import Link from 'next/link'
 import { Check, Copy, ExternalLink, Shield, Terminal, User, Wifi, X } from 'lucide-react'
 import { format } from 'date-fns'
 import type { SecurityEvent } from '@/lib/types'
@@ -13,6 +14,14 @@ interface EventDrawerProps {
 export function EventDrawer({ event, onClose }: EventDrawerProps) {
   const [copied, setCopied] = useState(false)
 
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [onClose])
+
   if (!event) return null
 
   const handleCopyRaw = () => {
@@ -23,26 +32,32 @@ export function EventDrawer({ event, onClose }: EventDrawerProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm animate-fade-in">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="event-drawer-title"
+      className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm animate-fade-in"
+    >
       {/* Click outside backdrop */}
       <div className="flex-1" onClick={onClose} />
 
       {/* Drawer panel */}
-      <div className="w-full max-w-xl border-l border-[#1f2937] bg-[#11161d] p-6 shadow-2xl flex flex-col h-full overflow-y-auto">
+      <div className="w-full max-w-xl border-l border-border bg-panel p-6 shadow-2xl flex flex-col h-full overflow-y-auto animate-slide-in-right">
         {/* Drawer Header */}
-        <div className="flex items-center justify-between border-b border-[#1f2937] pb-4">
+        <div className="flex items-center justify-between border-b border-border pb-4">
           <div>
-            <span className="font-mono text-[11px] text-[#9ca3af] uppercase tracking-wider block">
+            <span className="font-mono text-[10px] text-ink-muted uppercase tracking-wider block">
               Event Inspector
             </span>
-            <h2 className="text-base font-semibold text-[#f3f4f6] font-mono mt-0.5">
+            <h2 id="event-drawer-title" className="text-base font-semibold text-ink-primary font-mono mt-0.5">
               {event.event_type}
             </h2>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#1f2937] bg-[#171e28] text-[#9ca3af] hover:text-[#f3f4f6] hover:border-[#374151] transition"
+            aria-label="Close drawer"
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-elevated text-ink-secondary hover:text-ink-primary hover:border-border-active transition active:scale-95"
           >
             <X className="h-4 w-4" />
           </button>
@@ -108,6 +123,23 @@ export function EventDrawer({ event, onClose }: EventDrawerProps) {
             </span>
           </div>
         </div>
+
+        {event.incident_id && (
+          <div className="mt-4 flex items-center justify-between rounded-lg border border-accent-emerald/30 bg-accent-emerald/10 p-3 font-mono text-xs">
+            <div className="flex items-center gap-2 text-accent-emerald">
+              <Shield className="h-4 w-4 shrink-0" />
+              <span className="font-semibold">Correlated Incident:</span>
+              <span className="text-ink-primary font-bold">{event.incident_id.slice(0, 8)}...</span>
+            </div>
+            <Link
+              href={`/incidents/${event.incident_id}`}
+              className="inline-flex items-center gap-1 font-semibold text-accent-emerald hover:underline text-xs"
+            >
+              <span>Workspace</span>
+              <ExternalLink className="h-3 w-3" />
+            </Link>
+          </div>
+        )}
 
         {event.description && (
           <div className="mt-4">

@@ -4,50 +4,109 @@ import React, { useRef, useState } from 'react'
 import Link from 'next/link'
 import {
   Activity,
+  AlertCircle,
   AlertTriangle,
   ArrowRight,
+  Check,
   CheckCircle2,
   Clock,
+  Copy,
+  Cpu,
   Database,
+  ExternalLink,
+  FileCode,
+  FileSpreadsheet,
   FileText,
+  HardDrive,
+  Layers,
   Loader2,
+  Lock,
+  Radio,
+  RefreshCw,
+  Server,
   Shield,
+  ShieldAlert,
+  ShieldCheck,
+  Terminal,
   Upload,
+  UploadCloud,
+  Wifi,
+  X,
   Zap,
 } from 'lucide-react'
 
 import { uploadLogs } from '@/lib/api'
 import type { LogUploadResponse } from '@/lib/types'
+import { useToast } from '@/components/ui/Toast'
+
+const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024 // 10 MB
 
 export default function UploadLogsPage() {
+  const { success, error: toastError } = useToast()
+
   const [file, setFile] = useState<File | null>(null)
   const [sourceName, setSourceName] = useState('')
   const [dragging, setDragging] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [result, setResult] = useState<LogUploadResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [copiedJobId, setCopiedJobId] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
+  const validateFile = (candidate: File): string | null => {
+    const ext = candidate.name.toLowerCase().split('.').pop()
+    if (ext !== 'csv' && ext !== 'json') {
+      return 'Unsupported file format. The ingestion engine requires .csv (with headers) or .json array telemetry.'
+    }
+    if (candidate.size > MAX_FILE_SIZE_BYTES) {
+      const sizeMB = (candidate.size / (1024 * 1024)).toFixed(1)
+      return `File size (${sizeMB} MB) exceeds the 10 MB limit. Please chunk your telemetry batch.`
+    }
+    return null
+  }
+
   const handleSelectFile = (selectedFile: File) => {
+    setError(null)
+    setResult(null)
+
+    const validationErr = validateFile(selectedFile)
+    if (validationErr) {
+      setError(validationErr)
+      setFile(null)
+      setSourceName('')
+      return
+    }
+
     setFile(selectedFile)
     if (!sourceName) {
       setSourceName(selectedFile.name)
     }
-    setResult(null)
-    setError(null)
   }
 
   const handleUpload = async () => {
     if (!file || uploading) return
+
+    const validationErr = validateFile(file)
+    if (validationErr) {
+      setError(validationErr)
+      return
+    }
+
     setUploading(true)
     setError(null)
     setResult(null)
 
     try {
-      const res = await uploadLogs(file, sourceName || file.name)
+      const res = await uploadLogs(file, sourceName.trim() || file.name)
       setResult(res)
+      success(
+        'Ingestion Complete',
+        `Parsed ${res.events_parsed} events, formed ${res.incidents_created} incidents`
+      )
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Telemetry upload processing failed')
+      const msg = e instanceof Error ? e.message : 'Telemetry upload processing failed'
+      setError(msg)
+      toastError('Ingestion Failed', msg)
     } finally {
       setUploading(false)
     }
@@ -58,27 +117,89 @@ export default function UploadLogsPage() {
     setSourceName('')
     setResult(null)
     setError(null)
+    if (fileRef.current) {
+      fileRef.current.value = ''
+    }
   }
 
+  const copyJobId = (id: string) => {
+    navigator.clipboard.writeText(id)
+    setCopiedJobId(true)
+    success('Job ID Copied', 'Ingestion Job UUID copied to clipboard')
+    setTimeout(() => setCopiedJobId(false), 2000)
+  }
+
+  const fileExt = file?.name.toLowerCase().split('.').pop()
+
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="mx-auto max-w-4xl space-y-6">
       {/* Header */}
-      <div className="border-b border-[#1f2937] pb-5">
-        <div className="flex items-center gap-2">
-          <h1 className="text-xl font-bold tracking-tight text-[#f3f4f6]">
-            Telemetry Ingestion Engine
-          </h1>
-          <span className="flex items-center gap-1 rounded border border-[#10b981]/30 bg-[#10b981]/10 px-2 py-0.5 font-mono text-[10px] font-medium text-[#34d399]">
-            <Upload className="h-3 w-3" /> Batch Pipeline
-          </span>
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-5">
+        <div>
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h1 className="text-xl font-bold tracking-tight text-ink-primary">
+              Telemetry Ingestion Engine
+            </h1>
+            <span className="flex items-center gap-1.5 rounded-full border border-accent-emerald/30 bg-accent-emerald/10 px-2.5 py-0.5 font-mono text-[10px] font-bold text-accent-emerald uppercase">
+              <Upload className="h-3 w-3" />
+              <span>Synchronous Batch Pipeline</span>
+            </span>
+          </div>
+          <p className="mt-1 text-xs text-ink-secondary leading-relaxed">
+            Ingest raw CSV or JSON security telemetry for automated schema normalization, in-memory deduplication, rule-based anomaly detection, and incident correlation.
+          </p>
         </div>
-        <p className="mt-1 text-xs text-[#9ca3af]">
-          Upload structured security logs for automated entity extraction, rule detection, and incident correlation.
-        </p>
+
+        <div className="flex items-center gap-2.5">
+          <Link href="/logs" className="btn-ghost text-xs py-1.5 px-3 flex items-center gap-1.5">
+            <Database className="h-3.5 w-3.5" />
+            <span>SIEM Logs</span>
+          </Link>
+          <Link href="/incidents" className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5">
+            <Shield className="h-3.5 w-3.5" />
+            <span>Incident Queue</span>
+          </Link>
+        </div>
       </div>
 
-      {/* Upload Dropzone Card */}
-      <div className="card p-6 sm:p-8 border-[#1f2937] bg-[#11161d] space-y-5">
+      {/* Telemetry Ingestion Pipeline Verification Strip */}
+      <div className="card p-4 sm:p-5 border-border bg-panel space-y-3 shadow-sm">
+        <div className="flex items-center justify-between border-b border-border-subtle pb-2.5">
+          <span className="font-mono text-[10px] uppercase font-bold text-ink-muted tracking-wider flex items-center gap-1.5">
+            <Layers className="h-3.5 w-3.5 text-accent-emerald" />
+            <span>Synchronous Ingestion & Correlation Lifecycle</span>
+          </span>
+          <span className="font-mono text-[10px] text-accent-emerald font-semibold">
+            Transactional Backend Pipeline
+          </span>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 font-mono text-xs">
+          <div className="p-2.5 rounded-lg bg-elevated/40 border border-border-subtle space-y-1">
+            <span className="text-[10px] text-ink-muted uppercase block">1. Ingest</span>
+            <span className="text-ink-primary font-bold block truncate">CSV / JSON Stream</span>
+          </div>
+          <div className="p-2.5 rounded-lg bg-elevated/40 border border-border-subtle space-y-1">
+            <span className="text-[10px] text-ink-muted uppercase block">2. Normalize</span>
+            <span className="text-accent-cyan font-bold block truncate">Alias Mapping</span>
+          </div>
+          <div className="p-2.5 rounded-lg bg-elevated/40 border border-border-subtle space-y-1">
+            <span className="text-[10px] text-ink-muted uppercase block">3. Deduplicate</span>
+            <span className="text-[#facc15] font-bold block truncate">LRU Hash Match</span>
+          </div>
+          <div className="p-2.5 rounded-lg bg-elevated/40 border border-border-subtle space-y-1">
+            <span className="text-[10px] text-ink-muted uppercase block">4. Detect</span>
+            <span className="text-severity-critical font-bold block truncate">Rule Evaluation</span>
+          </div>
+          <div className="p-2.5 rounded-lg bg-elevated/40 border border-border-subtle space-y-1">
+            <span className="text-[10px] text-ink-muted uppercase block">5. Correlate</span>
+            <span className="text-accent-emerald font-bold block truncate">Incident Synthesis</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Upload Dropzone Workspace */}
+      <div className="card p-6 sm:p-7 border-border bg-panel space-y-5 shadow-sm">
         <input
           ref={fileRef}
           type="file"
@@ -91,197 +212,316 @@ export default function UploadLogsPage() {
         />
 
         <div
-          onClick={() => fileRef.current?.click()}
+          role="button"
+          tabIndex={0}
+          aria-label="Click to browse security logs or drop files here"
+          onClick={() => !uploading && fileRef.current?.click()}
+          onKeyDown={(e) => {
+            if ((e.key === 'Enter' || e.key === ' ') && !uploading) {
+              e.preventDefault()
+              fileRef.current?.click()
+            }
+          }}
           onDragOver={(e) => {
             e.preventDefault()
-            setDragging(true)
+            if (!uploading) setDragging(true)
           }}
           onDragLeave={() => setDragging(false)}
           onDrop={(e) => {
             e.preventDefault()
             setDragging(false)
-            const f = e.dataTransfer.files[0]
+            if (uploading) return
+            const f = e.dataTransfer.files?.[0]
             if (f) handleSelectFile(f)
           }}
-          className={`cursor-pointer flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-10 text-center transition ${
+          className={`cursor-pointer flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-8 sm:p-10 text-center transition outline-none ${
             dragging
-              ? 'border-[#10b981] bg-[#10b981]/10'
-              : 'border-[#1f2937] bg-[#0b0f14]/50 hover:border-[#374151] hover:bg-[#141b24]'
+              ? 'border-accent-emerald bg-accent-emerald/10 scale-[0.99]'
+              : file
+              ? 'border-accent-emerald/40 bg-elevated/30 hover:border-accent-emerald'
+              : 'border-border bg-canvas/60 hover:border-border-active hover:bg-elevated/40'
           }`}
         >
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-[#10b981]/30 bg-[#10b981]/10 text-[#10b981] mb-3">
-            <Upload className="h-6 w-6" />
+          <div className="flex h-11 w-11 items-center justify-center rounded-lg border border-border/80 bg-elevated text-accent-emerald mb-3">
+            <UploadCloud className="h-5 w-5" />
           </div>
 
           {file ? (
-            <div className="space-y-1">
-              <span className="font-mono text-sm font-semibold text-[#f3f4f6] block">
-                {file.name}
-              </span>
-              <span className="font-mono text-xs text-[#9ca3af] block">
-                {(file.size / 1024).toFixed(1)} KB · Ready for ingestion
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-center gap-2">
+                <span className="font-mono text-sm font-bold text-ink-primary">
+                  {file.name}
+                </span>
+                <span className="rounded bg-elevated px-2 py-0.5 font-mono text-[10px] uppercase font-bold text-accent-cyan border border-border">
+                  {fileExt}
+                </span>
+              </div>
+              <span className="font-mono text-xs text-ink-muted block">
+                {(file.size / 1024).toFixed(1)} KB · Validated format · Ready for ingestion
               </span>
             </div>
           ) : (
             <div className="space-y-1">
-              <span className="text-sm font-semibold text-[#f3f4f6] block">
-                Click to browse or drop log files here
+              <span className="text-sm font-bold text-ink-primary block">
+                Click to browse or drop security telemetry files here
               </span>
-              <span className="text-xs text-[#9ca3af] block">
-                Supports CSV (with headers) or JSON arrays, up to 10 MB
-              </span>
+              <p className="text-xs text-ink-secondary max-w-sm mx-auto leading-relaxed">
+                Accepts <strong className="text-ink-primary font-mono font-semibold">.csv</strong> (with header row) or <strong className="text-ink-primary font-mono font-semibold">.json</strong> arrays up to 10 MB and 10,000 events.
+              </p>
             </div>
           )}
         </div>
 
+        {/* Selected File Details & Actions Strip */}
         {file && !result && (
-          <div className="space-y-4 pt-2 border-t border-[#1f2937]">
-            <div>
-              <label className="block text-xs font-medium text-[#9ca3af] mb-1.5" htmlFor="source-name">
-                Batch Source Identifier (Optional)
-              </label>
-              <input
-                id="source-name"
-                type="text"
-                value={sourceName}
-                onChange={(e) => setSourceName(e.target.value)}
-                placeholder="e.g. fw-edge-cluster-01.csv"
-                className="input w-full font-mono text-xs"
-              />
+          <div className="space-y-4 pt-3 border-t border-border-subtle animate-fade-in">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="sm:col-span-2 space-y-1">
+                <label
+                  htmlFor="source-name"
+                  className="block text-xs font-mono font-semibold text-ink-secondary"
+                >
+                  Batch Source Identifier (Recorded as source_file)
+                </label>
+                <input
+                  id="source-name"
+                  type="text"
+                  value={sourceName}
+                  onChange={(e) => setSourceName(e.target.value)}
+                  placeholder="e.g. edge-firewall-cluster-01.csv"
+                  className="input w-full font-mono text-xs"
+                />
+              </div>
+
+              <div className="space-y-1 font-mono text-xs">
+                <span className="block text-ink-muted text-[11px]">Payload Size</span>
+                <div className="p-2.5 rounded-lg bg-elevated/60 border border-border-subtle text-ink-primary font-semibold">
+                  {(file.size / 1024).toFixed(1)} KB (
+                  {((file.size / MAX_FILE_SIZE_BYTES) * 100).toFixed(1)}% of 10 MB limit)
+                </div>
+              </div>
             </div>
 
-            <div className="flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={resetUpload}
-                disabled={uploading}
-                className="btn-ghost text-xs py-2 px-4"
-              >
-                Clear
-              </button>
-              <button
-                type="button"
-                onClick={handleUpload}
-                disabled={uploading}
-                className="btn-primary text-xs py-2 px-5"
-              >
-                {uploading ? (
-                  <>
-                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                    Parsing & Correlating…
-                  </>
-                ) : (
-                  <>
-                    <Zap className="mr-1.5 h-3.5 w-3.5" />
-                    Ingest Security Logs
-                  </>
-                )}
-              </button>
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+              <span className="text-[11px] font-mono text-ink-muted">
+                Validation passed: Ready to stream into backend ingestion pipeline
+              </span>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={resetUpload}
+                  disabled={uploading}
+                  className="btn-ghost text-xs py-2 px-4"
+                >
+                  Clear Selection
+                </button>
+                <button
+                  type="button"
+                  onClick={handleUpload}
+                  disabled={uploading}
+                  className="btn-primary text-xs py-2 px-5 flex items-center gap-2"
+                >
+                  {uploading ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      <span>Parsing & Correlating…</span>
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="h-3.5 w-3.5" />
+                      <span>Ingest Telemetry Batch</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
+          </div>
+        )}
+
+        {/* Uploading In-Progress Status Card */}
+        {uploading && (
+          <div className="rounded-xl border border-accent-emerald/30 bg-accent-emerald/10 p-5 text-center space-y-2 animate-pulse-subtle">
+            <Loader2 className="mx-auto h-6 w-6 animate-spin text-accent-emerald" />
+            <h3 className="text-sm font-bold text-ink-primary">
+              Streaming & Processing Telemetry Payload
+            </h3>
+            <p className="text-xs text-ink-secondary max-w-md mx-auto leading-relaxed">
+              Normalizing schema fields, deduplicating with database cache, evaluating detection rules, and synthesizing incident groups…
+            </p>
           </div>
         )}
       </div>
 
+      {/* Non-blocking Error Notice */}
       {error && (
-        <div className="flex gap-3 rounded-lg border border-[#7f1d1d] bg-[#450a0a]/50 p-4 text-xs text-[#fca5a5]">
-          <AlertTriangle className="h-4 w-4 shrink-0 text-[#ef4444]" />
-          <div>
-            <span className="font-semibold block mb-0.5">Ingestion Pipeline Failed</span>
-            <span>{error}</span>
+        <div className="flex items-center gap-3 rounded-xl border border-severity-critical/30 bg-severity-critical/10 p-4 text-xs text-severity-critical animate-fade-in">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <div className="space-y-0.5">
+            <span className="font-bold block">Ingestion Pipeline Failed</span>
+            <span className="text-ink-secondary">{error}</span>
           </div>
         </div>
       )}
 
-      {/* Ingestion Results Breakdown */}
+      {/* Ingestion Receipt & Processing Summary */}
       {result && (
-        <div className="card p-6 border-[#10b981]/30 bg-[#11161d] space-y-5 animate-fade-in">
-          <div className="flex items-center justify-between border-b border-[#1f2937] pb-3">
-            <div className="flex items-center gap-2 text-sm font-semibold text-[#34d399]">
-              <CheckCircle2 className="h-5 w-5" />
-              <span>Batch Ingestion Completed Successfully</span>
+        <div className="card p-6 sm:p-7 border-accent-emerald/40 bg-panel space-y-5 animate-fade-in shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border-subtle pb-4">
+            <div className="flex items-center gap-2.5">
+              <CheckCircle2 className="h-5 w-5 text-accent-emerald" />
+              <div>
+                <h3 className="text-base font-bold text-ink-primary">
+                  Telemetry Ingestion Receipt
+                </h3>
+                <div className="flex items-center gap-2 font-mono text-[11px] text-ink-muted mt-0.5">
+                  <span>Job: {result.job_id}</span>
+                  <button
+                    type="button"
+                    onClick={() => copyJobId(result.job_id)}
+                    className="hover:text-ink-primary transition"
+                    title="Copy Job ID"
+                  >
+                    {copiedJobId ? (
+                      <Check className="h-3 w-3 text-accent-emerald" />
+                    ) : (
+                      <Copy className="h-3 w-3" />
+                    )}
+                  </button>
+                </div>
+              </div>
             </div>
+
             <button
               type="button"
               onClick={resetUpload}
-              className="text-xs text-[#9ca3af] hover:text-[#f3f4f6] underline"
+              className="text-xs font-mono text-accent-emerald hover:underline"
             >
-              Upload Another Batch
+              Ingest Another Batch
             </button>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 font-mono">
-            <div className="rounded-lg border border-[#1f2937] bg-[#0b0f14] p-3">
-              <span className="text-[#6b7280] text-[10px] uppercase block">Events Parsed</span>
-              <span className="text-xl font-bold text-[#f3f4f6] block mt-1">
+          {/* 4 Ingestion Metrics Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5 font-mono text-xs">
+            <div className="rounded-lg border border-border/80 bg-elevated/40 p-3 space-y-1">
+              <span className="text-ink-muted text-[10px] uppercase block">Events Parsed</span>
+              <span className="text-2xl font-bold text-ink-primary block">
                 {result.events_parsed.toLocaleString()}
               </span>
+              <span className="text-[11px] text-ink-secondary block font-sans">
+                Normalized into DB
+              </span>
             </div>
 
-            <div className="rounded-lg border border-[#1f2937] bg-[#0b0f14] p-3">
-              <span className="text-[#6b7280] text-[10px] uppercase block">Events Flagged</span>
-              <span className="text-xl font-bold text-[#f87171] block mt-1">
+            <div className="rounded-lg border border-border/80 bg-elevated/40 p-3 space-y-1">
+              <span className="text-ink-muted text-[10px] uppercase block">Events Flagged</span>
+              <span className="text-2xl font-bold text-severity-critical block">
                 {result.events_flagged.toLocaleString()}
               </span>
-            </div>
-
-            <div className="rounded-lg border border-[#1f2937] bg-[#0b0f14] p-3">
-              <span className="text-[#6b7280] text-[10px] uppercase block">Incidents Formed</span>
-              <span className="text-xl font-bold text-[#facc15] block mt-1">
-                {result.incidents_created}
+              <span className="text-[11px] text-ink-secondary block font-sans">
+                Rule Anomaly Triggers
               </span>
             </div>
 
-            <div className="rounded-lg border border-[#1f2937] bg-[#0b0f14] p-3">
-              <span className="text-[#6b7280] text-[10px] uppercase block">Pipeline Latency</span>
-              <span className="text-xl font-bold text-[#38bdf8] block mt-1">
+            <div className="rounded-lg border border-border/80 bg-elevated/40 p-3 space-y-1">
+              <span className="text-ink-muted text-[10px] uppercase block">Incidents Formed</span>
+              <span className="text-2xl font-bold text-[#facc15] block">
+                {result.incidents_created}
+              </span>
+              <span className="text-[11px] text-ink-secondary block font-sans">
+                Attack Groups Synthesized
+              </span>
+            </div>
+
+            <div className="rounded-lg border border-border/80 bg-elevated/40 p-3 space-y-1">
+              <span className="text-ink-muted text-[10px] uppercase block">Pipeline Latency</span>
+              <span className="text-2xl font-bold text-accent-cyan block">
                 {result.processing_time_ms} ms
+              </span>
+              <span className="text-[11px] text-ink-secondary block font-sans">
+                Total Execution Time
               </span>
             </div>
           </div>
 
+          {/* Source File Meta Strip */}
+          <div className="p-3 rounded-lg bg-canvas/70 border border-border-subtle flex flex-wrap items-center justify-between text-xs font-mono">
+            <span className="text-ink-muted">
+              Source File: <strong className="text-ink-primary">{result.source_file}</strong>
+            </span>
+            <span className="text-accent-emerald">
+              All events indexed with transactional ACID persistence
+            </span>
+          </div>
+
+          {/* Investigation Pivots */}
           <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
-            <Link href="/logs" className="btn-ghost text-xs py-1.5 px-3">
-              <Database className="mr-1.5 h-3.5 w-3.5" /> Explore in SIEM Logs
+            <Link
+              href="/logs"
+              className="btn-ghost text-xs py-1.5 px-3 flex items-center gap-1.5"
+              title="Explore all security events in the SIEM Explorer"
+            >
+              <Database className="h-3.5 w-3.5" />
+              <span>Explore Ingested Logs</span>
             </Link>
+
+            {result.events_flagged > 0 && (
+              <Link
+                href="/logs?is_flagged=true"
+                className="btn-ghost text-xs py-1.5 px-3 flex items-center gap-1.5 text-severity-critical border-severity-critical/30"
+                title="View only events flagged as anomalous by rules"
+              >
+                <ShieldAlert className="h-3.5 w-3.5 text-severity-critical" />
+                <span>View Flagged Events ({result.events_flagged})</span>
+              </Link>
+            )}
+
             {result.incidents_created > 0 && (
               <Link
                 href="/incidents"
-                className="btn-primary text-xs py-1.5 px-3"
+                className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5"
+                title="Triage incidents formed by this ingestion"
               >
-                <Shield className="mr-1.5 h-3.5 w-3.5" />
+                <Shield className="h-3.5 w-3.5" />
                 <span>Triage Created Incidents ({result.incidents_created})</span>
-                <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+                <ArrowRight className="h-3 w-3" />
               </Link>
             )}
           </div>
         </div>
       )}
 
-      {/* Parser Specifications & Aliases */}
-      <div className="card p-5 border-[#1f2937] bg-[#11161d] space-y-3">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-[#9ca3af]">
-          Supported Ingestion Schemas
-        </h3>
-        <p className="text-xs text-[#9ca3af] leading-relaxed">
-          The ingestion engine automatically maps common field aliases across Windows Event Logs, Syslog,
-          Linux auth.log, and Wazuh alerts.
-        </p>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 font-mono text-[11px] pt-1">
-          <div className="rounded border border-[#1f2937] bg-[#0b0f14] p-2">
-            <span className="text-[#6b7280] block text-[10px]">Timestamp</span>
-            <span className="text-[#38bdf8]">@timestamp, time, date</span>
+      {/* Parser Specifications & Field Aliases Reference */}
+      <div className="card p-5 sm:p-6 border-border bg-panel space-y-3.5 shadow-sm">
+        <div className="space-y-0.5">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-ink-primary flex items-center gap-2">
+            <Terminal className="h-3.5 w-3.5 text-accent-emerald" />
+            <span>Supported Schema Normalization & Field Aliases</span>
+          </h3>
+          <p className="text-xs text-ink-secondary leading-relaxed">
+            The normalizer automatically resolves disparate field names across Windows Event Logs, Syslog, Linux auth.log, and Wazuh HIDS telemetry into standard fields.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 font-mono text-[11px] pt-1">
+          <div className="rounded-lg border border-border-subtle bg-elevated/40 p-2.5 space-y-1">
+            <span className="text-ink-muted text-[10px] uppercase block">Timestamp</span>
+            <span className="text-accent-cyan block">@timestamp, time, date, ts</span>
           </div>
-          <div className="rounded border border-[#1f2937] bg-[#0b0f14] p-2">
-            <span className="text-[#6b7280] block text-[10px]">Source IP</span>
-            <span className="text-[#38bdf8]">src_ip, source_ip, ip</span>
+
+          <div className="rounded-lg border border-border-subtle bg-elevated/40 p-2.5 space-y-1">
+            <span className="text-ink-muted text-[10px] uppercase block">Source IP</span>
+            <span className="text-accent-cyan block">src_ip, source_ip, ip, client_ip</span>
           </div>
-          <div className="rounded border border-[#1f2937] bg-[#0b0f14] p-2">
-            <span className="text-[#6b7280] block text-[10px]">Username</span>
-            <span className="text-[#facc15]">user, username, account</span>
+
+          <div className="rounded-lg border border-border-subtle bg-elevated/40 p-2.5 space-y-1">
+            <span className="text-ink-muted text-[10px] uppercase block">Username</span>
+            <span className="text-[#facc15] block">user, username, account, target_user</span>
           </div>
-          <div className="rounded border border-[#1f2937] bg-[#0b0f14] p-2">
-            <span className="text-[#6b7280] block text-[10px]">Event Type</span>
-            <span className="text-[#10b981]">event_type, action, rule</span>
+
+          <div className="rounded-lg border border-border-subtle bg-elevated/40 p-2.5 space-y-1">
+            <span className="text-ink-muted text-[10px] uppercase block">Event Type</span>
+            <span className="text-accent-emerald block">event_type, action, rule, activity</span>
           </div>
         </div>
       </div>

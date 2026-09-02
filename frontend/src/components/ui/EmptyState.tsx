@@ -23,11 +23,11 @@ export function EmptyState({
 }: EmptyStateProps) {
   return (
     <div className={`card flex flex-col items-center justify-center p-12 text-center ${className}`}>
-      <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-[#1f2937] bg-[#171e28] text-[#9ca3af]">
-        <Icon className="h-6 w-6 text-[#9ca3af]" />
+      <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-border bg-elevated text-ink-secondary">
+        <Icon className="h-6 w-6 text-ink-secondary" />
       </div>
-      <h3 className="mt-4 text-base font-semibold text-[#f3f4f6]">{title}</h3>
-      <p className="mt-1.5 max-w-sm text-sm text-[#9ca3af]">{description}</p>
+      <h3 className="mt-4 text-sm font-semibold text-ink-primary">{title}</h3>
+      <p className="mt-1.5 max-w-sm text-xs text-ink-secondary leading-relaxed">{description}</p>
       {actionLabel && actionHref && (
         <Link href={actionHref} className="btn-primary mt-5">
           {actionLabel}

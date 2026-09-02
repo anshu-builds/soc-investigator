@@ -8,10 +8,12 @@ interface SeverityBadgeProps {
 }
 
 const SEVERITY_CONFIG: Record<string, { label: string; className: string; dot: string }> = {
-  CRITICAL: { label: 'CRITICAL', className: 'badge-critical', dot: 'bg-[#ef4444]' },
-  HIGH:     { label: 'HIGH',     className: 'badge-high',     dot: 'bg-[#f97316]' },
-  MEDIUM:   { label: 'MEDIUM',   className: 'badge-medium',   dot: 'bg-[#eab308]' },
-  LOW:      { label: 'LOW',      className: 'badge-low',      dot: 'bg-[#64748b]' },
+  CRITICAL:      { label: 'CRITICAL', className: 'badge-critical', dot: 'bg-[#ef4444]' },
+  HIGH:          { label: 'HIGH',     className: 'badge-high',     dot: 'bg-[#f97316]' },
+  MEDIUM:        { label: 'MEDIUM',   className: 'badge-medium',   dot: 'bg-[#eab308]' },
+  LOW:           { label: 'LOW',      className: 'badge-low',      dot: 'bg-[#38bdf8]' },
+  INFO:          { label: 'INFO',     className: 'badge-info',     dot: 'bg-[#94a3b8]' },
+  INFORMATIONAL: { label: 'INFO',     className: 'badge-info',     dot: 'bg-[#94a3b8]' },
 }
 
 export function SeverityBadge({ severity, showDot = true, className = '' }: SeverityBadgeProps) {
@@ -19,7 +21,7 @@ export function SeverityBadge({ severity, showDot = true, className = '' }: Seve
   const cfg = SEVERITY_CONFIG[norm] || SEVERITY_CONFIG.LOW
   return (
     <span className={`${cfg.className} ${className}`}>
-      {showDot && <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />}
+      {showDot && <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${cfg.dot}`} />}
       {cfg.label}
     </span>
   )
@@ -31,10 +33,10 @@ interface StatusBadgeProps {
 }
 
 const STATUS_CONFIG: Record<string, { label: string; className: string; dot: string }> = {
-  OPEN:           { label: 'OPEN',           className: 'status-open',           dot: 'bg-[#eab308]' },
-  INVESTIGATING:  { label: 'INVESTIGATING',  className: 'status-investigating',  dot: 'bg-[#3b82f6]' },
-  CLOSED:         { label: 'CLOSED',         className: 'status-closed',         dot: 'bg-[#10b981]' },
-  FALSE_POSITIVE: { label: 'FALSE POSITIVE', className: 'status-false_positive', dot: 'bg-[#64748b]' },
+  OPEN:           { label: 'OPEN',           className: 'status-open',           dot: 'bg-[#facc15]' },
+  INVESTIGATING:  { label: 'INVESTIGATING',  className: 'status-investigating',  dot: 'bg-[#60a5fa]' },
+  CLOSED:         { label: 'CLOSED',         className: 'status-closed',         dot: 'bg-[#34d399]' },
+  FALSE_POSITIVE: { label: 'FALSE POSITIVE', className: 'status-false_positive', dot: 'bg-[#94a3b8]' },
 }
 
 export function StatusBadge({ status, className = '' }: StatusBadgeProps) {
