@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import hmac
 import inspect
 import logging
@@ -48,10 +49,11 @@ from backend.schemas import (
     IncidentSummary, LogUploadResponse, LoginRequest, MessageListResponse,
     NLQueryRequest, NLQueryResponse,
     ReportCreateResponse, ReportOut, ReportRequest, SecurityEventListResponse,
-    SecurityEventOut, SessionCreateResponse, TokenResponse,
+    SecurityEventOut, SessionCreateResponse, TokenResponse, TTSResponse,
 )
 from backend.services.log_service import parse_upload, run_pipeline
 from backend.services.report_service import generate_report
+from backend.services.sarvam_tts import SarvamTTSError, TextPreparationError, synthesize
 from ai.investigation_chain import run_investigation_chain
 from ai.summary_generator import generate_incident_summary
 from ai.nlu import answer_question
@@ -638,6 +640,192 @@ async def get_messages(
     )
     messages = result.scalars().all()
     return MessageListResponse(session_id=session_id, messages=messages)
+
+
+async def _log_tts_audit(
+    db: AsyncSession,
+    *,
+    current_user: User,
+    request: Request,
+    message_id: uuid.UUID,
+    session_id: Optional[uuid.UUID],
+    status_value: str,
+    outcome: str,
+    character_count: Optional[int] = None,
+    chunk_count: Optional[int] = None,
+) -> None:
+    """Persist a TTS audit event without storing message or provider content."""
+    details = {"outcome": outcome}
+    if session_id is not None:
+        details["session_id"] = str(session_id)
+    if character_count is not None:
+        details["character_count"] = character_count
+    if chunk_count is not None:
+        details["chunk_count"] = chunk_count
+    await log_audit_event(
+        db,
+        action="TTS_SYNTHESIS",
+        entity_type="CHAT_MESSAGE",
+        actor_user_id=current_user.id,
+        entity_id=str(message_id),
+        source_ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+        details=details,
+        status=status_value,
+    )
+    await db.commit()
+
+
+@app.post("/api/messages/{message_id}/tts", response_model=TTSResponse, tags=["investigation"])
+async def message_tts(
+    message_id: uuid.UUID,
+    request: Request,
+    response: Response,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Generate audio only for an authorized persisted assistant message."""
+    current_settings = get_settings()
+    await check_rate_limit(
+        key=f"tts:user:{current_user.id}",
+        limit=current_settings.rate_limit_tts_per_minute,
+        window_seconds=60,
+        action_name="text-to-speech requests",
+    )
+
+    # Do not reveal configuration state through message existence or ownership.
+    if not current_settings.sarvam_tts_enabled or not current_settings.sarvam_api_key:
+        await _log_tts_audit(
+            db,
+            current_user=current_user,
+            request=request,
+            message_id=message_id,
+            session_id=None,
+            status_value="FAILURE",
+            outcome="UNAVAILABLE",
+        )
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Audio is temporarily unavailable.")
+
+    result = await db.execute(
+        select(ChatMessage, InvestigationSession)
+        .join(InvestigationSession, ChatMessage.session_id == InvestigationSession.id)
+        .where(ChatMessage.id == message_id)
+    )
+    row = result.one_or_none()
+    if row is None:
+        await _log_tts_audit(
+            db,
+            current_user=current_user,
+            request=request,
+            message_id=message_id,
+            session_id=None,
+            status_value="FAILURE",
+            outcome="NOT_FOUND",
+        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Message not found")
+
+    message, session = row
+    if (session.analyst_id is None or session.analyst_id != current_user.id) and current_user.role.lower() != "admin":
+        await _log_tts_audit(
+            db,
+            current_user=current_user,
+            request=request,
+            message_id=message_id,
+            session_id=session.id,
+            status_value="FAILURE",
+            outcome="ACCESS_DENIED",
+        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied to this investigation session")
+    if message.role != "assistant":
+        await _log_tts_audit(
+            db,
+            current_user=current_user,
+            request=request,
+            message_id=message_id,
+            session_id=session.id,
+            status_value="FAILURE",
+            outcome="UNSUPPORTED_MESSAGE_ROLE",
+        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only assistant messages can be converted to speech.")
+
+    # InMemoryRateLimiter is process-local. This key bounds work in this Uvicorn
+    # worker only; a deployment-wide cap requires a shared coordinator.
+    process_key = "tts_active:process"
+    user_key = f"tts_active:{current_user.id}"
+    if not await limiter.acquire_concurrency(process_key, current_settings.max_concurrent_tts_per_process):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many audio requests are in progress. Please try again shortly.",
+            headers={"Retry-After": "2"},
+        )
+    user_slot_acquired = False
+    try:
+        if not await limiter.acquire_concurrency(user_key, current_settings.max_concurrent_tts_per_user):
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Too many audio requests are in progress. Please try again shortly.",
+                headers={"Retry-After": "2"},
+            )
+        user_slot_acquired = True
+
+        try:
+            clips = await synthesize(
+                message.content,
+                api_key=current_settings.sarvam_api_key,
+                language=current_settings.sarvam_tts_language,
+                speaker=current_settings.sarvam_tts_speaker,
+                timeout_seconds=current_settings.sarvam_tts_timeout,
+                max_total_chars=current_settings.sarvam_tts_max_characters,
+                max_chunks=current_settings.sarvam_tts_max_chunks,
+                max_audio_bytes_per_clip=current_settings.sarvam_tts_max_audio_bytes_per_clip,
+                max_total_audio_bytes=current_settings.sarvam_tts_max_total_audio_bytes,
+            )
+        except TextPreparationError:
+            await _log_tts_audit(
+                db, current_user=current_user, request=request, message_id=message_id,
+                session_id=session.id, status_value="FAILURE", outcome="TEXT_LIMIT_REJECTED",
+            )
+            raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Audio is temporarily unavailable.")
+        except SarvamTTSError:
+            await _log_tts_audit(
+                db, current_user=current_user, request=request, message_id=message_id,
+                session_id=session.id, status_value="FAILURE", outcome="PROVIDER_FAILURE",
+            )
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Audio is temporarily unavailable.")
+        except Exception:
+            logger.exception("Unexpected TTS synthesis failure")
+            await _log_tts_audit(
+                db, current_user=current_user, request=request, message_id=message_id,
+                session_id=session.id, status_value="FAILURE", outcome="INTERNAL_FAILURE",
+            )
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Audio is temporarily unavailable.")
+
+        if not clips:
+            await _log_tts_audit(
+                db, current_user=current_user, request=request, message_id=message_id,
+                session_id=session.id, status_value="FAILURE", outcome="EMPTY_CONTENT",
+            )
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Audio is temporarily unavailable.")
+
+        encoded_clips = [base64.b64encode(clip.audio_bytes).decode("ascii") for clip in clips]
+        await _log_tts_audit(
+            db,
+            current_user=current_user,
+            request=request,
+            message_id=message_id,
+            session_id=session.id,
+            status_value="SUCCESS",
+            outcome="SUCCESS",
+            character_count=len(message.content),
+            chunk_count=len(clips),
+        )
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, private"
+        response.headers["Pragma"] = "no-cache"
+        return TTSResponse(audio_clips_base64=encoded_clips, chunk_count=len(encoded_clips))
+    finally:
+        if user_slot_acquired:
+            await limiter.release_concurrency(user_key)
+        await limiter.release_concurrency(process_key)
 
 
 @app.post("/api/incidents/{incident_id}/report", response_model=ReportCreateResponse, tags=["reports"])
