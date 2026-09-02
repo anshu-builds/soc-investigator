@@ -1,6 +1,8 @@
 import type { Metadata } from 'next'
 import './globals.css'
 import { AppShell } from '@/components/layout/AppShell'
+// DESIGN PREVIEW ONLY (remove before production): synthetic auth + /api fixtures
+import { DesignPreviewBootstrap } from '@/preview/DesignPreviewBootstrap'
 
 export const metadata: Metadata = {
   title: 'SOC Investigator | Enterprise SIEM & Incident Response',
@@ -27,6 +29,8 @@ export default function RootLayout({
         />
       </head>
       <body className="antialiased bg-canvas text-ink-primary">
+        {/* DESIGN PREVIEW ONLY (remove before production) */}
+        <DesignPreviewBootstrap />
         <AppShell>{children}</AppShell>
       </body>
     </html>
