@@ -44,7 +44,7 @@ function LogsContent() {
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Server-backed filters initialized optionally from URL search params
+  // Server-backed filters
   const [eventType, setEventType] = useState(searchParams.get('event_type') || '')
   const [isFlagged, setIsFlagged] = useState<string>(searchParams.get('is_flagged') || '')
   const [sourceIp, setSourceIp] = useState(searchParams.get('source_ip') || '')
@@ -89,7 +89,6 @@ function LogsContent() {
     fetchLogs()
   }, [fetchLogs])
 
-  // Client-side quick refinement across description, raw log, and target host for currently loaded slice
   const filteredEvents = events.filter((ev) => {
     if (!localSearch.trim()) return true
     const q = localSearch.toLowerCase()
@@ -112,16 +111,27 @@ function LogsContent() {
     setPage(1)
   }
 
-  const hasFilters = Boolean(eventType || isFlagged || sourceIp || username || localSearch)
-
-  // Build active filter items for FilterChips
   const activeFilterList: ActiveFilterItem[] = []
-  if (localSearch) {
+  if (eventType) {
     activeFilterList.push({
-      id: 'search',
-      label: 'Search',
-      value: `"${localSearch}"`,
-      onRemove: () => setLocalSearch(''),
+      id: 'event_type',
+      label: 'Type',
+      value: eventType,
+      onRemove: () => {
+        setEventType('')
+        setPage(1)
+      },
+    })
+  }
+  if (isFlagged) {
+    activeFilterList.push({
+      id: 'is_flagged',
+      label: 'Posture',
+      value: isFlagged === 'true' ? 'Flagged Anomalies' : 'Standard Baseline',
+      onRemove: () => {
+        setIsFlagged('')
+        setPage(1)
+      },
     })
   }
   if (sourceIp) {
@@ -146,429 +156,351 @@ function LogsContent() {
       },
     })
   }
-  if (eventType) {
-    activeFilterList.push({
-      id: 'event_type',
-      label: 'Type',
-      value: eventType,
-      onRemove: () => {
-        setEventType('')
-        setPage(1)
-      },
-    })
-  }
-  if (isFlagged) {
-    activeFilterList.push({
-      id: 'is_flagged',
-      label: 'Status',
-      value: isFlagged === 'true' ? 'Flagged Anomalies' : 'Standard Events',
-      onRemove: () => {
-        setIsFlagged('')
-        setPage(1)
-      },
-    })
-  }
 
-  const startRange = total > 0 ? (page - 1) * PAGE_SIZE + 1 : 0
-  const endRange = Math.min(total, page * PAGE_SIZE)
+  const hasFilters = activeFilterList.length > 0 || localSearch.trim().length > 0
+  const startRange = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1
+  const endRange = Math.min(page * PAGE_SIZE, total)
 
   return (
-    <div className="space-y-6">
-      {/* Top Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-5">
+    <div className="space-y-4">
+      {/* 1. TOP HEADER & QUICK FILTER BAR */}
+      <div className="flex flex-wrap items-end justify-between gap-4 border-b border-border/80 pb-4">
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-xl font-bold tracking-tight text-ink-primary">
-              SIEM Event Explorer
+              SIEM EVENT EXPLORER
             </h1>
-            <span className="inline-flex items-center gap-1 rounded-full border border-border bg-elevated px-2.5 py-0.5 font-mono text-[11px] text-ink-secondary">
-              <span className="font-semibold text-ink-primary">{total}</span>
-              <span>ingested events</span>
+            <span className="rounded bg-elevated px-2 py-0.5 font-mono text-xs font-semibold text-ink-secondary border border-border">
+              {total.toLocaleString()} EVENTS RECORDED
             </span>
           </div>
           <p className="mt-1 text-xs text-ink-secondary">
-            Ingested security telemetry, audit event streams, and anomaly detection logs
+            Unified telemetry stream with attribute filtering, anomaly tracking, and incident correlation
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        {/* Action Controls */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Flagged Filter Toggle */}
+          <button
+            type="button"
+            onClick={() => {
+              setIsFlagged(isFlagged === 'true' ? '' : 'true')
+              setPage(1)
+            }}
+            className={`rounded px-2.5 py-1 text-xs font-sans transition-colors flex items-center gap-1.5 ${
+              isFlagged === 'true'
+                ? 'bg-[#450a0a]/60 text-severity-critical font-semibold border border-severity-critical/40'
+                : 'text-ink-secondary hover:text-severity-critical hover:bg-elevated/40'
+            }`}
+          >
+            <ShieldAlert className="h-3.5 w-3.5 text-severity-critical" />
+            <span>Flagged Only</span>
+          </button>
+
+          <Link
+            href="/query"
+            className="btn-ghost text-xs py-1 px-2.5 flex items-center gap-1.5"
+            title="Translate natural language to SQL"
+          >
+            <Terminal className="h-3 w-3" />
+            <span>Query Studio</span>
+          </Link>
+
           <button
             type="button"
             onClick={() => fetchLogs(true)}
-            disabled={loading || refreshing}
-            className="btn-ghost text-xs py-1.5 px-3 flex items-center gap-1.5"
-            title="Refresh logs from server"
+            disabled={refreshing}
+            className="btn-ghost text-xs py-1 px-2.5 flex items-center gap-1.5"
+            title="Refresh stream"
           >
             <RefreshCw
-              className={`h-3.5 w-3.5 ${
-                loading || refreshing ? 'animate-spin text-accent-emerald' : 'text-ink-muted'
-              }`}
+              className={`h-3 w-3 ${refreshing ? 'animate-spin text-accent-emerald' : 'text-ink-muted'}`}
             />
-            <span>{refreshing ? 'Syncing…' : 'Sync'}</span>
+            <span className="hidden sm:inline">{refreshing ? 'Syncing…' : 'Sync'}</span>
           </button>
-          <Link
-            href="/upload-logs"
-            className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5"
-          >
-            <Upload className="h-3.5 w-3.5" />
-            <span>Ingest Telemetry</span>
-          </Link>
         </div>
       </div>
 
-      {/* Filter Controls Toolbar */}
-      <div className="card p-4 space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-          {/* Source IP Exact Search */}
-          <div className="relative">
-            <Wifi className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-muted" />
-            <input
-              type="text"
-              placeholder="Source IP (exact)..."
-              value={sourceIp}
-              onChange={(e) => {
-                setSourceIp(e.target.value)
-                setPage(1)
-              }}
-              className="input w-full pl-9 pr-7 font-mono text-xs"
-            />
-            {sourceIp && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSourceIp('')
-                  setPage(1)
-                }}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-muted hover:text-ink-primary"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            )}
-          </div>
-
-          {/* Username Exact Search */}
-          <div className="relative">
-            <User className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-muted" />
-            <input
-              type="text"
-              placeholder="Target User (exact)..."
-              value={username}
-              onChange={(e) => {
-                setUsername(e.target.value)
-                setPage(1)
-              }}
-              className="input w-full pl-9 pr-7 font-mono text-xs"
-            />
-            {username && (
-              <button
-                type="button"
-                onClick={() => {
-                  setUsername('')
-                  setPage(1)
-                }}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-muted hover:text-ink-primary"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            )}
-          </div>
-
-          {/* Event Type Select */}
-          <div>
-            <select
-              value={eventType}
-              onChange={(e) => {
-                setEventType(e.target.value)
-                setPage(1)
-              }}
-              className="select w-full font-mono text-xs"
-              aria-label="Filter by Event Type"
-            >
-              <option value="">All Event Types</option>
-              <option value="AUTH_FAILURE">AUTH_FAILURE</option>
-              <option value="AUTH_SUCCESS">AUTH_SUCCESS</option>
-              <option value="SUDO_EXECUTION">SUDO_EXECUTION</option>
-              <option value="SSH_LOGIN">SSH_LOGIN</option>
-              <option value="PRIVILEGE_ESCALATION">PRIVILEGE_ESCALATION</option>
-              <option value="FILE_ACCESS">FILE_ACCESS</option>
-              <option value="PORT_SCAN">PORT_SCAN</option>
-            </select>
-          </div>
-
-          {/* Flagged Status Select */}
-          <div>
-            <select
-              value={isFlagged}
-              onChange={(e) => {
-                setIsFlagged(e.target.value)
-                setPage(1)
-              }}
-              className="select w-full font-mono text-xs"
-              aria-label="Filter by Flagged Status"
-            >
-              <option value="">All Telemetry</option>
-              <option value="true">Flagged Anomalies Only</option>
-              <option value="false">Standard Telemetry Only</option>
-            </select>
-          </div>
-
-          {/* Local Description/Payload Search */}
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-muted" />
-            <input
-              type="text"
-              placeholder="Refine payload/desc..."
-              value={localSearch}
-              onChange={(e) => setLocalSearch(e.target.value)}
-              className="input w-full pl-9 pr-7 font-mono text-xs"
-            />
-            {localSearch && (
-              <button
-                type="button"
-                onClick={() => setLocalSearch('')}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-muted hover:text-ink-primary"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Active Filter Chips */}
-        {hasFilters && (
-          <ActiveFilters
-            filters={activeFilterList}
-            onClearAll={resetFilters}
-            className="border-t border-border-subtle pt-2"
+      {/* 2. REFINED FILTER TOOLBAR */}
+      <div className="flex flex-wrap items-center gap-2.5 py-1">
+        {/* Search Input */}
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-muted" />
+          <input
+            type="text"
+            placeholder="Search description, raw log, host…"
+            value={localSearch}
+            onChange={(e) => setLocalSearch(e.target.value)}
+            className="input w-full pl-9 pr-8 text-xs py-1.5 bg-panel/60"
           />
-        )}
-      </div>
-
-      {/* Main Events Table Card */}
-      <div className="card overflow-hidden">
-        {loading && !refreshing ? (
-          <SkeletonTable rows={PAGE_SIZE} cols={8} />
-        ) : error ? (
-          <div className="p-12 text-center">
-            <AlertTriangle className="mx-auto h-8 w-8 text-severity-critical" />
-            <h3 className="mt-3 text-sm font-semibold text-ink-primary">Failed to load events</h3>
-            <p className="text-xs text-ink-secondary mt-1">{error}</p>
+          {localSearch && (
             <button
               type="button"
-              onClick={() => fetchLogs()}
-              className="btn-ghost mt-4 text-xs"
+              onClick={() => setLocalSearch('')}
+              aria-label="Clear search"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-muted hover:text-ink-primary p-0.5"
             >
-              Retry
+              <X className="h-3 w-3" />
             </button>
-          </div>
-        ) : filteredEvents.length === 0 ? (
-          <EmptyState
-            title={hasFilters ? 'No matching security events' : 'No telemetry ingested yet'}
-            description={
-              hasFilters
-                ? 'No events match your current query parameters. Try broadening your filters or clearing search.'
-                : 'No security events found in the database. Ingest CSV or JSON telemetry logs to populate the SIEM.'
-            }
-            actionLabel={hasFilters ? 'Clear all filters' : 'Ingest Logs'}
-            onAction={hasFilters ? resetFilters : undefined}
-            actionHref={hasFilters ? undefined : '/upload-logs'}
-          />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left font-sans text-xs">
-              <thead className="th-soc border-b border-border">
-                <tr>
-                  <th className="py-2.5 px-4">Timestamp (UTC)</th>
-                  <th className="py-2.5 px-4">Posture</th>
-                  <th className="py-2.5 px-4">Event Type</th>
-                  <th className="py-2.5 px-4">Category</th>
-                  <th className="py-2.5 px-4">Target User</th>
-                  <th className="py-2.5 px-4">Source IP</th>
-                  <th className="py-2.5 px-4">Host / Destination</th>
-                  <th className="py-2.5 px-4">Correlated Incident</th>
-                  <th className="py-2.5 px-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border-subtle font-mono text-xs">
-                {filteredEvents.map((ev) => (
-                  <tr
-                    key={ev.id}
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') setSelectedEvent(ev)
-                    }}
-                    onClick={() => setSelectedEvent(ev)}
-                    className="tr-soc cursor-pointer focus-visible:outline-none focus-visible:bg-highlight"
-                  >
-                    <td className="td-soc whitespace-nowrap text-ink-secondary">
-                      <span title={format(new Date(ev.timestamp), 'yyyy-MM-dd HH:mm:ss')}>
-                        {format(new Date(ev.timestamp), 'HH:mm:ss')}
-                      </span>
-                      <span className="text-[10px] text-ink-muted block mt-0.5 font-sans">
-                        {formatDistanceToNow(new Date(ev.timestamp), { addSuffix: true })}
-                      </span>
-                    </td>
+          )}
+        </div>
 
-                    <td className="td-soc whitespace-nowrap">
-                      {ev.is_flagged ? (
-                        <span className="inline-flex items-center gap-1 rounded border border-severity-critical/40 bg-severity-critical/15 px-2 py-0.5 text-[10px] font-bold text-severity-critical">
-                          <Shield className="h-3 w-3" />
-                          <span>Flagged</span>
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center rounded border border-border bg-elevated px-2 py-0.5 text-[10px] text-ink-muted">
-                          Standard
-                        </span>
-                      )}
-                    </td>
+        {/* Event Type Filter */}
+        <select
+          value={eventType}
+          onChange={(e) => {
+            setEventType(e.target.value)
+            setPage(1)
+          }}
+          className="select text-xs font-mono py-1.5"
+          aria-label="Filter by Event Type"
+        >
+          <option value="">All Event Types</option>
+          <option value="AUTH_FAILURE">AUTH_FAILURE</option>
+          <option value="AUTH_SUCCESS">AUTH_SUCCESS</option>
+          <option value="PRIV_CHANGE">PRIV_CHANGE</option>
+          <option value="FILE_ACCESS">FILE_ACCESS</option>
+          <option value="PROCESS_EXEC">PROCESS_EXEC</option>
+        </select>
 
-                    <td className="td-soc whitespace-nowrap">
-                      <span className="font-semibold text-ink-primary group-hover:text-accent-emerald transition-colors">
-                        {ev.event_type}
-                      </span>
-                    </td>
+        {/* Source IP Filter */}
+        <input
+          type="text"
+          placeholder="Filter Source IP…"
+          value={sourceIp}
+          onChange={(e) => {
+            setSourceIp(e.target.value)
+            setPage(1)
+          }}
+          className="input w-36 text-xs font-mono py-1.5 bg-panel/60"
+        />
 
-                    <td className="td-soc whitespace-nowrap text-ink-muted text-[11px]">
-                      <span className="rounded bg-elevated px-1.5 py-0.5 border border-border-subtle">
-                        {ev.event_category}
-                      </span>
-                    </td>
+        {/* Username Filter */}
+        <input
+          type="text"
+          placeholder="Filter User…"
+          value={username}
+          onChange={(e) => {
+            setUsername(e.target.value)
+            setPage(1)
+          }}
+          className="input w-32 text-xs font-mono py-1.5 bg-panel/60"
+        />
 
-                    <td className="td-soc whitespace-nowrap font-mono text-[11px]">
-                      {ev.username ? (
-                        <span className="flex items-center gap-1 text-[#facc15]">
-                          <User className="h-3 w-3 shrink-0" />
-                          <span>{ev.username}</span>
-                        </span>
-                      ) : (
-                        <span className="text-ink-muted">—</span>
-                      )}
-                    </td>
-
-                    <td className="td-soc whitespace-nowrap text-accent-cyan">
-                      <span className="flex items-center gap-1">
-                        <Wifi className="h-3 w-3 shrink-0" />
-                        <span>{ev.source_ip}</span>
-                      </span>
-                    </td>
-
-                    <td className="td-soc whitespace-nowrap text-ink-secondary font-mono text-[11px]">
-                      {ev.hostname || ev.destination_ip ? (
-                        <span className="flex items-center gap-1">
-                          <Server className="h-3 w-3 shrink-0 text-ink-muted" />
-                          <span>{ev.hostname || ev.destination_ip}</span>
-                        </span>
-                      ) : (
-                        <span className="text-ink-muted">—</span>
-                      )}
-                    </td>
-
-                    <td
-                      className="td-soc whitespace-nowrap"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {ev.incident_id ? (
-                        <Link
-                          href={`/incidents/${ev.incident_id}`}
-                          className="inline-flex items-center gap-1 rounded border border-accent-emerald/30 bg-accent-emerald/10 px-2 py-0.5 font-mono text-[10px] text-accent-emerald hover:bg-accent-emerald/20 transition active:scale-95"
-                          title="Open correlated incident workspace"
-                        >
-                          <ShieldAlert className="h-3 w-3 shrink-0" />
-                          <span>{ev.incident_id.slice(0, 8)}</span>
-                          <ExternalLink className="h-2.5 w-2.5" />
-                        </Link>
-                      ) : (
-                        <span className="text-ink-muted font-mono text-[11px]">—</span>
-                      )}
-                    </td>
-
-                    <td
-                      className="td-soc text-right whitespace-nowrap"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => setSelectedEvent(ev)}
-                        className="inline-flex items-center gap-1 rounded-md border border-border bg-elevated px-2 py-1 text-[11px] font-sans font-medium text-ink-secondary hover:text-ink-primary hover:border-border-active transition active:scale-95"
-                        title="Inspect full raw event and structured metadata"
-                      >
-                        <Terminal className="h-3 w-3 text-accent-emerald" />
-                        <span>Inspect</span>
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {/* Polished Pagination Footer */}
-        {total > 0 && (
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3 bg-panel/40 text-xs">
-            <span className="text-ink-secondary font-mono text-[11px]">
-              Showing <span className="text-ink-primary font-semibold">{startRange}</span> to{' '}
-              <span className="text-ink-primary font-semibold">{endRange}</span> of{' '}
-              <span className="text-ink-primary font-semibold">{total}</span> events
-            </span>
-
-            <div className="flex items-center gap-1.5">
-              {/* First Page */}
-              <button
-                type="button"
-                onClick={() => setPage(1)}
-                disabled={page === 1 || loading}
-                aria-label="Go to first page"
-                className="flex h-7 w-7 items-center justify-center rounded border border-border bg-elevated text-ink-muted hover:text-ink-primary hover:border-border-active disabled:opacity-30 disabled:pointer-events-none transition"
-              >
-                <ChevronsLeft className="h-3.5 w-3.5" />
-              </button>
-
-              {/* Prev Page */}
-              <button
-                type="button"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page === 1 || loading}
-                aria-label="Go to previous page"
-                className="flex h-7 w-7 items-center justify-center rounded border border-border bg-elevated text-ink-muted hover:text-ink-primary hover:border-border-active disabled:opacity-30 disabled:pointer-events-none transition"
-              >
-                <ChevronLeft className="h-3.5 w-3.5" />
-              </button>
-
-              {/* Page Number Indicator */}
-              <div className="flex items-center gap-1 px-1 font-mono text-xs text-ink-secondary">
-                <span className="text-ink-primary font-semibold">{page}</span>
-                <span className="text-ink-muted">/</span>
-                <span>{totalPages}</span>
-              </div>
-
-              {/* Next Page */}
-              <button
-                type="button"
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page === totalPages || loading}
-                aria-label="Go to next page"
-                className="flex h-7 w-7 items-center justify-center rounded border border-border bg-elevated text-ink-muted hover:text-ink-primary hover:border-border-active disabled:opacity-30 disabled:pointer-events-none transition"
-              >
-                <ChevronRight className="h-3.5 w-3.5" />
-              </button>
-
-              {/* Last Page */}
-              <button
-                type="button"
-                onClick={() => setPage(totalPages)}
-                disabled={page === totalPages || loading}
-                aria-label="Go to last page"
-                className="flex h-7 w-7 items-center justify-center rounded border border-border bg-elevated text-ink-muted hover:text-ink-primary hover:border-border-active disabled:opacity-30 disabled:pointer-events-none transition"
-              >
-                <ChevronsRight className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          </div>
+        {hasFilters && (
+          <button
+            type="button"
+            onClick={resetFilters}
+            className="text-xs font-mono text-ink-muted hover:text-ink-primary underline px-1"
+          >
+            Clear
+          </button>
         )}
       </div>
 
-      {/* Raw Event Inspector Drawer */}
+      {/* Active Filter Chips */}
+      {hasFilters && (
+        <ActiveFilters
+          filters={activeFilterList}
+          onClearAll={resetFilters}
+          className="pt-1 pb-2 border-b border-border/60"
+        />
+      )}
+
+      {/* 3. OPEN CANVAS HIGH-DENSITY EVENT TABLE */}
+      {loading && !refreshing ? (
+        <SkeletonTable rows={PAGE_SIZE} cols={7} />
+      ) : error ? (
+        <div className="p-12 text-center border border-severity-critical/30 rounded bg-panel/50">
+          <AlertTriangle className="mx-auto h-8 w-8 text-severity-critical" />
+          <h3 className="mt-3 text-sm font-semibold text-ink-primary">Failed to load security telemetry</h3>
+          <p className="text-xs text-ink-secondary mt-1">{error}</p>
+          <button
+            type="button"
+            onClick={() => fetchLogs()}
+            className="btn-ghost mt-4 text-xs"
+          >
+            Retry
+          </button>
+        </div>
+      ) : filteredEvents.length === 0 ? (
+        <EmptyState
+          title={hasFilters ? 'No matching security events found' : 'No telemetry events recorded'}
+          description={
+            hasFilters
+              ? 'Try modifying your search query or removing active filters.'
+              : 'The SIEM database contains zero security events. Ingest logs to populate the database.'
+          }
+          actionLabel={hasFilters ? 'Clear All Filters' : 'Ingest Logs'}
+          onAction={hasFilters ? resetFilters : undefined}
+          actionHref={hasFilters ? undefined : '/upload-logs'}
+        />
+      ) : (
+        <div className="overflow-x-auto border-y border-border/80">
+          <table className="w-full text-left font-sans text-xs">
+            <thead className="th-soc">
+              <tr>
+                <th className="py-2.5 px-3.5 w-24">Posture</th>
+                <th className="py-2.5 px-3.5">Timestamp (UTC)</th>
+                <th className="py-2.5 px-3.5">Event Type</th>
+                <th className="py-2.5 px-3.5">Source IP</th>
+                <th className="py-2.5 px-3.5">Target / User</th>
+                <th className="py-2.5 px-3.5">Description</th>
+                <th className="py-2.5 px-3.5">Correlated Incident</th>
+                <th className="py-2.5 px-3.5 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border-subtle/80">
+              {filteredEvents.map((ev) => (
+                <tr
+                  key={ev.id}
+                  onClick={() => setSelectedEvent(ev)}
+                  className={`tr-soc cursor-pointer ${
+                    ev.is_flagged ? 'bg-severity-critical/5' : ''
+                  }`}
+                >
+                  {/* Posture Dot */}
+                  <td className="td-soc whitespace-nowrap">
+                    {ev.is_flagged ? (
+                      <span className="inline-flex items-center gap-1.5 font-mono text-[11px] font-semibold text-severity-critical">
+                        <span className="h-1.5 w-1.5 rounded-full bg-severity-critical" />
+                        FLAGGED
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 font-mono text-[11px] text-ink-muted">
+                        <span className="h-1.5 w-1.5 rounded-full bg-border-active" />
+                        NORMAL
+                      </span>
+                    )}
+                  </td>
+
+                  {/* Timestamp */}
+                  <td className="td-soc whitespace-nowrap font-mono text-[11px] text-ink-secondary">
+                    {format(new Date(ev.timestamp), 'yyyy-MM-dd HH:mm:ss')}
+                  </td>
+
+                  {/* Event Type */}
+                  <td className="td-soc whitespace-nowrap font-mono text-[11px] font-semibold text-ink-primary">
+                    {ev.event_type}
+                  </td>
+
+                  {/* Source IP */}
+                  <td className="td-soc whitespace-nowrap font-mono text-[11px] text-accent-cyan">
+                    {ev.source_ip || '—'}
+                  </td>
+
+                  {/* Target / User */}
+                  <td className="td-soc whitespace-nowrap font-mono text-[11px]">
+                    {ev.username ? (
+                      <span className="text-[#facc15] font-semibold">{ev.username}</span>
+                    ) : ev.hostname ? (
+                      <span className="text-ink-secondary">{ev.hostname}</span>
+                    ) : (
+                      <span className="text-ink-muted">—</span>
+                    )}
+                  </td>
+
+                  {/* Description */}
+                  <td className="td-soc max-w-xs truncate text-ink-secondary" title={ev.description || ''}>
+                    {ev.description || '—'}
+                  </td>
+
+                  {/* Correlated Incident */}
+                  <td
+                    className="td-soc whitespace-nowrap"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {ev.incident_id ? (
+                      <Link
+                        href={`/incidents/${ev.incident_id}`}
+                        className="inline-flex items-center gap-1 rounded bg-elevated px-1.5 py-0.5 font-mono text-[10px] text-accent-emerald border border-accent-emerald/30 hover:bg-accent-emerald/10 transition-colors"
+                        title="View linked security incident"
+                      >
+                        <Shield className="h-3 w-3" />
+                        <span>INC-{ev.incident_id.slice(0, 8)}</span>
+                      </Link>
+                    ) : (
+                      <span className="text-ink-muted font-mono text-[10px]">—</span>
+                    )}
+                  </td>
+
+                  {/* Inspect Action */}
+                  <td
+                    className="td-soc text-right whitespace-nowrap"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setSelectedEvent(ev)
+                    }}
+                  >
+                    <button
+                      type="button"
+                      className="btn-ghost text-[11px] py-0.5 px-2"
+                    >
+                      Raw &gt;
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* 4. FOOTER PAGINATION */}
+      {total > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-2 text-xs">
+          <span className="text-ink-muted font-mono text-[11px]">
+            Showing <strong className="text-ink-primary font-semibold">{startRange}</strong> to{' '}
+            <strong className="text-ink-primary font-semibold">{endRange}</strong> of{' '}
+            <strong className="text-ink-primary font-semibold">{total}</strong> security events
+          </span>
+
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setPage(1)}
+              disabled={page === 1 || loading}
+              aria-label="First page"
+              className="flex h-7 w-7 items-center justify-center rounded border border-border bg-panel text-ink-muted hover:text-ink-primary disabled:opacity-30 disabled:pointer-events-none transition-colors"
+            >
+              <ChevronsLeft className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1 || loading}
+              aria-label="Previous page"
+              className="flex h-7 w-7 items-center justify-center rounded border border-border bg-panel text-ink-muted hover:text-ink-primary disabled:opacity-30 disabled:pointer-events-none transition-colors"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+            </button>
+            <span className="px-2 font-mono text-xs text-ink-secondary">
+              Page <strong className="text-ink-primary">{page}</strong> of {totalPages}
+            </span>
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages || loading}
+              aria-label="Next page"
+              className="flex h-7 w-7 items-center justify-center rounded border border-border bg-panel text-ink-muted hover:text-ink-primary disabled:opacity-30 disabled:pointer-events-none transition-colors"
+            >
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setPage(totalPages)}
+              disabled={page === totalPages || loading}
+              aria-label="Last page"
+              className="flex h-7 w-7 items-center justify-center rounded border border-border bg-panel text-ink-muted hover:text-ink-primary disabled:opacity-30 disabled:pointer-events-none transition-colors"
+            >
+              <ChevronsRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Raw Event Detail Drawer */}
       <EventDrawer
         event={selectedEvent}
         onClose={() => setSelectedEvent(null)}
@@ -579,7 +511,14 @@ function LogsContent() {
 
 export default function LogsPage() {
   return (
-    <Suspense fallback={<SkeletonTable rows={PAGE_SIZE} cols={8} />}>
+    <Suspense
+      fallback={
+        <div className="space-y-4">
+          <div className="h-8 w-48 bg-elevated rounded animate-pulse" />
+          <SkeletonTable rows={PAGE_SIZE} cols={8} />
+        </div>
+      }
+    >
       <LogsContent />
     </Suspense>
   )

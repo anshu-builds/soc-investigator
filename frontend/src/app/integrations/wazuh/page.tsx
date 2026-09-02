@@ -9,10 +9,8 @@ import {
   ArrowRight,
   CheckCircle2,
   Clock,
-  Cpu,
   Database,
   ExternalLink,
-  GitCommit,
   HardDrive,
   Layers,
   Lock,
@@ -26,40 +24,45 @@ import {
   Wifi,
   Zap,
 } from 'lucide-react'
-import { format } from 'date-fns'
+import { format, formatDistanceToNow } from 'date-fns'
 
 import { getCurrentUser, getWazuhStatus, triggerWazuhPoll } from '@/lib/api'
 import type { UserSession, WazuhPollResponse, WazuhStatusResponse } from '@/lib/types'
-import { SkeletonCard } from '@/components/ui/Skeleton'
 import { useToast } from '@/components/ui/Toast'
+import { SkeletonCard } from '@/components/ui/Skeleton'
 
-export default function WazuhTelemetryPage() {
+export default function WazuhIntegrationPage() {
   const { success, error: toastError } = useToast()
 
+  const [user, setUser] = useState<UserSession | null>(null)
   const [status, setStatus] = useState<WazuhStatusResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
-  const [polling, setPolling] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Polling mutation state
+  const [polling, setPolling] = useState(false)
   const [pollResult, setPollResult] = useState<WazuhPollResponse | null>(null)
   const [pollError, setPollError] = useState<string | null>(null)
-  const [user, setUser] = useState<UserSession | null>(null)
 
-  const loadStatus = useCallback(async (isSilent = false) => {
-    if (!isSilent) setLoading(true)
-    else setRefreshing(true)
-    setError(null)
+  const loadStatus = useCallback(
+    async (isSilent = false) => {
+      if (!isSilent) setLoading(true)
+      else setRefreshing(true)
+      setError(null)
 
-    try {
-      const res = await getWazuhStatus()
-      setStatus(res)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to retrieve Wazuh integration status')
-    } finally {
-      setLoading(false)
-      setRefreshing(false)
-    }
-  }, [])
+      try {
+        const res = await getWazuhStatus()
+        setStatus(res)
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Unable to connect to Wazuh telemetry service')
+      } finally {
+        setLoading(false)
+        setRefreshing(false)
+      }
+    },
+    []
+  )
 
   useEffect(() => {
     setUser(getCurrentUser())
@@ -67,6 +70,7 @@ export default function WazuhTelemetryPage() {
   }, [loadStatus])
 
   const handleManualPoll = async () => {
+    if (polling) return
     setPolling(true)
     setPollError(null)
     setPollResult(null)
@@ -74,8 +78,11 @@ export default function WazuhTelemetryPage() {
     try {
       const res = await triggerWazuhPoll()
       setPollResult(res)
-      success('Wazuh Poll Succeeded', `Processed ${res.processed} alerts, ${res.duplicates} duplicates`)
-      await loadStatus(true)
+      success(
+        'Wazuh Polling Complete',
+        `Fetched ${res.fetched} alerts, processed ${res.processed} into database (${res.duplicates} duplicates)`
+      )
+      loadStatus(true)
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Wazuh poll execution failed'
       setPollError(msg)
@@ -88,7 +95,6 @@ export default function WazuhTelemetryPage() {
   const isAdmin = user?.role === 'admin'
   const p = status?.api_polling
 
-  // Health assessment
   const hasErrors = (p?.consecutive_errors ?? 0) > 0
   const isReady = status?.status === 'ready'
   const healthLabel = hasErrors
@@ -101,19 +107,15 @@ export default function WazuhTelemetryPage() {
     return (
       <div className="space-y-6">
         <div className="h-6 w-48 bg-elevated rounded animate-pulse" />
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <SkeletonCard />
-          <SkeletonCard />
-          <SkeletonCard />
-          <SkeletonCard />
-        </div>
+        <div className="h-24 bg-elevated/40 rounded border border-border/60 animate-pulse" />
+        <div className="h-48 bg-elevated/40 rounded border border-border/60 animate-pulse" />
       </div>
     )
   }
 
   if (error && !status) {
     return (
-      <div className="card max-w-md mx-auto p-8 text-center border-severity-critical/40 bg-panel mt-12 space-y-4">
+      <div className="max-w-md mx-auto p-8 text-center border border-severity-critical/30 rounded-lg bg-panel mt-12 space-y-4">
         <AlertTriangle className="mx-auto h-8 w-8 text-severity-critical" />
         <div className="space-y-1">
           <h2 className="text-base font-bold text-ink-primary">Wazuh Integration Offline</h2>
@@ -122,7 +124,7 @@ export default function WazuhTelemetryPage() {
         <button
           type="button"
           onClick={() => loadStatus()}
-          className="btn-primary text-xs py-2 px-4 inline-flex items-center gap-1.5"
+          className="btn-primary text-xs py-1.5 px-4 inline-flex items-center gap-1.5"
         >
           <RefreshCw className="h-3.5 w-3.5" />
           <span>Retry Connection</span>
@@ -133,58 +135,55 @@ export default function WazuhTelemetryPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-5">
+      {/* 1. HEADER & HEALTH POSTURE */}
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border/80 pb-4">
         <div>
           <div className="flex flex-wrap items-center gap-2.5">
             <h1 className="text-xl font-bold tracking-tight text-ink-primary">
-              Wazuh Telemetry & Integrations
+              Wazuh Telemetry Console
             </h1>
-            <span
-              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 font-mono text-[10px] font-bold uppercase ${
-                hasErrors
-                  ? 'border-[#f59e0b]/40 bg-[#f59e0b]/10 text-[#facc15]'
-                  : isReady
-                  ? 'border-accent-emerald/30 bg-accent-emerald/10 text-accent-emerald'
-                  : 'border-severity-critical/40 bg-severity-critical/10 text-severity-critical'
-              }`}
-            >
-              <Radio
-                className={`h-2.5 w-2.5 ${
-                  isReady && !hasErrors ? 'animate-pulse text-accent-emerald' : 'text-severity-critical'
+            <div className="flex items-center gap-1.5 text-xs font-mono">
+              <span
+                className={`h-2 w-2 rounded-full ${
+                  isReady && !hasErrors ? 'bg-accent-emerald' : 'bg-severity-critical'
                 }`}
               />
-              <span>{healthLabel}</span>
-            </span>
+              <span
+                className={`font-semibold ${
+                  isReady && !hasErrors ? 'text-accent-emerald' : 'text-severity-critical'
+                }`}
+              >
+                {healthLabel}
+              </span>
+            </div>
           </div>
           <p className="mt-1 text-xs text-ink-secondary leading-relaxed">
-            Live Wazuh HIDS/SIEM webhook listener and REST API polling engine status.
+            HIDS sensor telemetry ingestion, deduplication cache, and REST API polling daemon state
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => loadStatus(true)}
             disabled={loading || refreshing}
-            className="btn-ghost text-xs py-1.5 px-3 flex items-center gap-1.5"
-            title="Refresh status from backend"
+            className="btn-ghost text-xs py-1 px-3 flex items-center gap-1.5"
+            title="Refresh integration status"
           >
             <RefreshCw
-              className={`h-3.5 w-3.5 ${
+              className={`h-3 w-3 ${
                 loading || refreshing ? 'animate-spin text-accent-emerald' : 'text-ink-muted'
               }`}
             />
-            <span>{refreshing ? 'Syncing…' : 'Refresh Status'}</span>
+            <span>{refreshing ? 'Syncing…' : 'Sync'}</span>
           </button>
         </div>
       </div>
 
-      {/* Primary Health & Ingestion KPI Strip */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 font-mono text-xs">
-        {/* Webhook Auth Card */}
-        <div className="card p-4 border-border bg-panel space-y-1">
-          <span className="text-[10px] uppercase text-ink-muted tracking-wider block">
+      {/* 2. UNIFIED 4-METRIC TELEMETRY OPERATIONS STRIP */}
+      <div className="rounded-lg border border-border/80 bg-panel/70 grid grid-cols-2 sm:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-border/60 text-xs font-mono">
+        <div className="p-3.5 space-y-1">
+          <span className="text-[10px] uppercase text-ink-muted tracking-wider block font-sans">
             Webhook Authentication
           </span>
           <div className="flex items-center gap-1.5 pt-0.5">
@@ -194,154 +193,125 @@ export default function WazuhTelemetryPage() {
               <ShieldAlert className="h-4 w-4 text-ink-muted shrink-0" />
             )}
             <span className="text-sm font-bold text-ink-primary truncate">
-              {status?.authentication === 'configured' ? 'Configured (HMAC)' : 'Unconfigured'}
+              {status?.authentication === 'configured' ? 'HMAC Validated' : 'Unconfigured'}
             </span>
           </div>
-          <span className="text-[11px] text-ink-secondary block pt-1">
-            Fail-closed signature validation
+          <span className="text-[11px] text-ink-secondary block">
+            Fail-closed validation
           </span>
         </div>
 
-        {/* Dedup Cache Card */}
-        <div className="card p-4 border-border bg-panel space-y-1">
-          <span className="text-[10px] uppercase text-ink-muted tracking-wider block">
-            Dedup Cache Entries
+        <div className="p-3.5 space-y-1">
+          <span className="text-[10px] uppercase text-ink-muted tracking-wider block font-sans">
+            Dedup LRU Cache
           </span>
-          <span className="text-base font-bold text-accent-cyan block pt-0.5">
-            {status?.dedup_cache_size?.toLocaleString() ?? 0}
-          </span>
-          <span className="text-[11px] text-ink-secondary block pt-1">
-            In-memory LRU tracking
+          <div className="text-xl font-bold text-ink-primary pt-0.5">
+            {status?.dedup_cache_size ?? 0}
+          </div>
+          <span className="text-[11px] text-ink-secondary block">
+            Cached alert signatures
           </span>
         </div>
 
-        {/* Alerts Ingested Card */}
-        <div className="card p-4 border-border bg-panel space-y-1">
-          <span className="text-[10px] uppercase text-ink-muted tracking-wider block">
+        <div className="p-3.5 space-y-1">
+          <span className="text-[10px] uppercase text-ink-muted tracking-wider block font-sans">
             Alerts Processed
           </span>
-          <span className="text-base font-bold text-accent-emerald block pt-0.5">
-            {p?.total_alerts_processed?.toLocaleString() ?? 0}
-          </span>
-          <span className="text-[11px] text-ink-secondary block pt-1">
-            {p?.total_alerts_fetched ?? 0} fetched from manager
+          <div className="text-xl font-bold text-accent-emerald pt-0.5">
+            {(p?.total_alerts_processed ?? 0).toLocaleString()}
+          </div>
+          <span className="text-[11px] text-ink-secondary block">
+            of {(p?.total_alerts_fetched ?? 0).toLocaleString()} fetched
           </span>
         </div>
 
-        {/* Dedup Rejections Card */}
-        <div className="card p-4 border-border bg-panel space-y-1">
-          <span className="text-[10px] uppercase text-ink-muted tracking-wider block">
-            Duplicate Rejections
+        <div className="p-3.5 space-y-1">
+          <span className="text-[10px] uppercase text-ink-muted tracking-wider block font-sans">
+            Redundancy / Errors
           </span>
-          <span className="text-base font-bold text-[#facc15] block pt-0.5">
-            {p?.total_duplicates?.toLocaleString() ?? 0}
-          </span>
-          <span className="text-[11px] text-ink-secondary block pt-1">
+          <div className="text-xl font-bold text-ink-primary pt-0.5">
+            {p?.total_duplicates ?? 0}
+          </div>
+          <span className="text-[11px] text-ink-secondary block">
             {p?.consecutive_errors ?? 0} consecutive errors
           </span>
         </div>
       </div>
 
-      {/* Telemetry Ingestion Pipeline Visual Flow */}
-      <div className="card p-5 border-border bg-panel space-y-4">
-        <div className="flex items-center justify-between border-b border-border-subtle pb-3">
-          <div className="space-y-0.5">
-            <h2 className="text-sm font-bold text-ink-primary flex items-center gap-2">
-              <Layers className="h-4 w-4 text-accent-emerald" />
-              Wazuh Telemetry Ingestion Pipeline
-            </h2>
-            <p className="text-xs text-ink-secondary">
-              Verified end-to-end telemetry architecture from Wazuh Manager to correlation
-            </p>
-          </div>
-          <span className="font-mono text-[10px] uppercase text-ink-muted font-bold">
-            Authoritative Pipeline Flow
+      {/* 3. PIPELINE ARCHITECTURE FLOW */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between border-b border-border/80 pb-2">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-ink-muted flex items-center gap-1.5">
+            <Layers className="h-3.5 w-3.5 text-accent-emerald" />
+            <span>Telemetry Pipeline Flow & Processing Stages</span>
+          </h2>
+          <span className="font-mono text-[10px] text-accent-emerald font-semibold">
+            Active Runtime Topology
           </span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 font-mono text-xs">
-          {/* Stage 1: Manager */}
-          <div className="rounded-xl border border-border bg-elevated/40 p-3.5 space-y-1.5">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] uppercase text-ink-muted font-bold">Source</span>
-              <Server className="h-3.5 w-3.5 text-accent-cyan" />
-            </div>
-            <span className="font-bold text-ink-primary block">Wazuh Manager</span>
+        <div className="grid grid-cols-1 sm:grid-cols-5 gap-2.5 font-mono text-xs">
+          <div className="p-3 rounded border border-border/80 bg-panel/50 space-y-1">
+            <span className="text-[10px] text-ink-muted uppercase block">1. Origin</span>
+            <span className="text-ink-primary font-bold block">Wazuh Manager</span>
+            <span className="text-[11px] text-ink-secondary block font-sans">HIDS & Agents</span>
+          </div>
+
+          <div className="p-3 rounded border border-border/80 bg-panel/50 space-y-1">
+            <span className="text-[10px] text-ink-muted uppercase block">2. Ingest</span>
+            <span className="text-accent-cyan font-bold block">API / Webhook</span>
             <span className="text-[11px] text-ink-secondary block font-sans">
-              HIDS & Syslog Events
+              {p?.configured ? 'Poller Loop' : 'Webhook Listener'}
             </span>
           </div>
 
-          {/* Stage 2: Ingestion Vector */}
-          <div className="rounded-xl border border-border bg-elevated/40 p-3.5 space-y-1.5">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] uppercase text-ink-muted font-bold">Ingestion</span>
-              <Wifi className="h-3.5 w-3.5 text-accent-emerald" />
-            </div>
-            <span className="font-bold text-ink-primary block">REST API / Webhook</span>
+          <div className="p-3 rounded border border-border/80 bg-panel/50 space-y-1">
+            <span className="text-[10px] text-ink-muted uppercase block">3. Deduplicate</span>
+            <span className="text-[#facc15] font-bold block">LRU Cache</span>
             <span className="text-[11px] text-ink-secondary block font-sans">
-              {p?.configured ? 'Poller Configured' : 'Webhook Listener'}
+              {status?.dedup_cache_size ?? 0} keys cached
             </span>
           </div>
 
-          {/* Stage 3: Deduplication */}
-          <div className="rounded-xl border border-border bg-elevated/40 p-3.5 space-y-1.5">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] uppercase text-ink-muted font-bold">Deduplication</span>
-              <HardDrive className="h-3.5 w-3.5 text-[#facc15]" />
-            </div>
-            <span className="font-bold text-ink-primary block">Dedup Cache</span>
-            <span className="text-[11px] text-ink-secondary block font-sans">
-              {status?.dedup_cache_size ?? 0} active entries
-            </span>
+          <div className="p-3 rounded border border-border/80 bg-panel/50 space-y-1">
+            <span className="text-[10px] text-ink-muted uppercase block">4. Persist</span>
+            <span className="text-ink-primary font-bold block">Event Store</span>
+            <span className="text-[11px] text-ink-secondary block font-sans">PostgreSQL DB</span>
           </div>
 
-          {/* Stage 4: Storage */}
-          <div className="rounded-xl border border-border bg-elevated/40 p-3.5 space-y-1.5">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] uppercase text-ink-muted font-bold">Persistence</span>
-              <Database className="h-3.5 w-3.5 text-accent-emerald" />
-            </div>
-            <span className="font-bold text-ink-primary block">Security Events</span>
-            <span className="text-[11px] text-ink-secondary block font-sans">
-              PostgreSQL Relational DB
-            </span>
-          </div>
-
-          {/* Stage 5: Correlation */}
-          <div className="rounded-xl border border-border bg-elevated/40 p-3.5 space-y-1.5">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] uppercase text-ink-muted font-bold">Intelligence</span>
-              <ShieldAlert className="h-3.5 w-3.5 text-severity-critical" />
-            </div>
-            <span className="font-bold text-ink-primary block">Detection Engine</span>
-            <span className="text-[11px] text-ink-secondary block font-sans">
-              Attack Hypothesis Synthesis
-            </span>
+          <div className="p-3 rounded border border-border/80 bg-panel/50 space-y-1">
+            <span className="text-[10px] text-ink-muted uppercase block">5. Correlate</span>
+            <span className="text-severity-critical font-bold block">Detection</span>
+            <span className="text-[11px] text-ink-secondary block font-sans">Incident Engine</span>
           </div>
         </div>
       </div>
 
-      {/* Manual Poll Trigger Control Panel */}
-      <div className="card p-5 sm:p-6 border-border bg-panel space-y-4 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border-subtle pb-4">
-          <div>
-            <h2 className="text-sm font-bold text-ink-primary flex items-center gap-2">
-              <Zap className="h-4 w-4 text-accent-emerald" />
-              On-Demand Polling Execution
-            </h2>
-            <p className="mt-0.5 text-xs text-ink-secondary">
-              Trigger an instantaneous incremental sync from the Wazuh manager API using the current watermark
-            </p>
+      {/* 4. ON-DEMAND POLLING EXECUTION & ENGINE AUDIT */}
+      <div className="grid gap-6 lg:grid-cols-2 pt-2">
+        {/* Left: Manual Polling Action Panel */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between border-b border-border/80 pb-2">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-muted flex items-center gap-1.5">
+              <Zap className="h-3.5 w-3.5 text-accent-emerald" />
+              <span>On-Demand Incremental Sync</span>
+            </h3>
+            <span className="font-mono text-[10px] text-ink-muted">
+              {isAdmin ? 'Admin Authorized' : 'Read-Only Role'}
+            </span>
           </div>
 
-          <div>
+          <div className="p-4 rounded border border-border/80 bg-panel/60 space-y-3">
+            <p className="text-xs text-ink-secondary leading-relaxed">
+              Trigger an instantaneous sync cycle from the Wazuh Manager API using the active watermark offset.
+            </p>
+
             {isAdmin ? (
               <button
                 type="button"
                 onClick={handleManualPoll}
                 disabled={polling}
-                className="btn-primary text-xs py-2 px-4 disabled:opacity-50 flex items-center gap-2"
+                className="btn-primary text-xs py-1.5 px-4 disabled:opacity-50 flex items-center gap-2"
               >
                 {polling ? (
                   <>
@@ -356,123 +326,80 @@ export default function WazuhTelemetryPage() {
                 )}
               </button>
             ) : (
-              <div className="flex items-center gap-2 rounded-lg border border-border bg-elevated px-3 py-2 text-xs font-mono text-ink-muted">
+              <div className="flex items-center gap-2 rounded border border-border bg-elevated px-3 py-2 text-xs font-mono text-ink-muted">
                 <Lock className="h-3.5 w-3.5 text-severity-critical" />
                 <span>Admin Authorization Required to Trigger Polling</span>
+              </div>
+            )}
+
+            {pollError && (
+              <div className="flex items-center gap-2 rounded border border-severity-critical/30 bg-severity-critical/10 p-3 text-xs text-severity-critical animate-fade-in">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>{pollError}</span>
+              </div>
+            )}
+
+            {pollResult && (
+              <div className="rounded border border-accent-emerald/30 bg-accent-emerald/10 p-3 text-xs font-mono space-y-1.5 animate-fade-in">
+                <div className="flex items-center gap-1.5 text-accent-emerald font-bold">
+                  <CheckCircle2 className="h-4 w-4" />
+                  <span>Sync Complete</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-[11px] text-ink-primary pt-1">
+                  <div>Fetched: <strong className="font-bold">{pollResult.fetched}</strong></div>
+                  <div>Processed: <strong className="font-bold text-accent-emerald">{pollResult.processed}</strong></div>
+                  <div>Duplicates: <strong className="font-bold">{pollResult.duplicates}</strong></div>
+                </div>
               </div>
             )}
           </div>
         </div>
 
-        {pollError && (
-          <div className="flex items-center gap-3 rounded-xl border border-severity-critical/30 bg-severity-critical/10 p-4 text-xs text-severity-critical animate-fade-in">
-            <AlertCircle className="h-4 w-4 shrink-0" />
-            <span>{pollError}</span>
+        {/* Right: Engine Parameters Audit Table */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between border-b border-border/80 pb-2">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-muted flex items-center gap-1.5">
+              <Server className="h-3.5 w-3.5 text-accent-cyan" />
+              <span>Engine Parameters & Watermark</span>
+            </h3>
+            <span className="font-mono text-[10px] text-ink-muted">Read-Only</span>
           </div>
-        )}
 
-        {pollResult && (
-          <div className="rounded-xl border border-accent-emerald/30 bg-accent-emerald/10 p-4 space-y-2 text-xs font-mono animate-fade-in">
-            <div className="flex items-center gap-2 text-accent-emerald font-bold">
-              <CheckCircle2 className="h-4 w-4" />
-              <span>Poll Cycle Completed Successfully</span>
+          <div className="rounded border border-border/80 bg-panel/60 divide-y divide-border-subtle/80 text-xs font-mono">
+            <div className="flex items-center justify-between p-2.5">
+              <span className="text-ink-secondary">Target Manager URL</span>
+              <span className="text-ink-primary font-semibold truncate max-w-[200px]">
+                {p?.api_url || 'https://wazuh.manager:55000'}
+              </span>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 text-ink-primary">
-              <div>
-                Fetched: <strong className="text-ink-primary">{pollResult.fetched}</strong>
-              </div>
-              <div>
-                Processed: <strong className="text-accent-emerald">{pollResult.processed}</strong>
-              </div>
-              <div>
-                Duplicates: <strong className="text-[#facc15]">{pollResult.duplicates}</strong>
-              </div>
-              <div>
-                Status: <strong className="text-accent-cyan">{pollResult.status}</strong>
-              </div>
+
+            <div className="flex items-center justify-between p-2.5">
+              <span className="text-ink-secondary">TLS Certificate Verification</span>
+              <span className="text-ink-primary">{p?.verify_ssl ? 'Strict SSL Enabled' : 'Disabled'}</span>
             </div>
-          </div>
-        )}
 
-        {p?.last_error && (
-          <div className="rounded-xl border border-severity-critical/30 bg-severity-critical/10 p-4 text-xs text-severity-critical space-y-1">
-            <span className="font-mono text-[10px] uppercase font-bold tracking-wider block">
-              Last Observed Poller Exception
-            </span>
-            <pre className="font-mono text-xs whitespace-pre-wrap">{p.last_error}</pre>
-          </div>
-        )}
-      </div>
+            <div className="flex items-center justify-between p-2.5">
+              <span className="text-ink-secondary">Active Telemetry Watermark</span>
+              <span className="text-accent-cyan font-bold truncate max-w-[200px]">
+                {p?.watermark || '0'}
+              </span>
+            </div>
 
-      {/* Engine Configuration & State Details */}
-      <div className="card p-5 sm:p-6 border-border bg-panel space-y-4 shadow-sm">
-        <h3 className="text-sm font-bold text-ink-primary flex items-center gap-2 border-b border-border-subtle pb-3">
-          <Cpu className="h-4 w-4 text-accent-emerald" />
-          Poller Engine Parameters & Watermark State
-        </h3>
+            <div className="flex items-center justify-between p-2.5">
+              <span className="text-ink-secondary">Polling Daemon Loop</span>
+              <span className="text-ink-primary font-semibold">
+                {p?.running ? 'Actively Polling' : p?.enabled ? 'Standby (Interval Active)' : 'Disabled'}
+              </span>
+            </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 font-mono text-xs">
-          <div className="rounded-xl border border-border-subtle bg-elevated/40 p-3.5">
-            <span className="text-ink-muted text-[10px] uppercase block">Target Endpoint</span>
-            <span className="text-accent-cyan block mt-1 truncate" title={p?.api_url || 'Unset'}>
-              {p?.api_url || 'Unconfigured'}
-            </span>
-          </div>
-
-          <div className="rounded-xl border border-border-subtle bg-elevated/40 p-3.5">
-            <span className="text-ink-muted text-[10px] uppercase block">SSL Verification</span>
-            <span className="text-ink-primary block mt-1">
-              {p?.verify_ssl ? 'Strict (TLS Verified)' : 'Disabled (Insecure)'}
-            </span>
-          </div>
-
-          <div className="rounded-xl border border-border-subtle bg-elevated/40 p-3.5">
-            <span className="text-ink-muted text-[10px] uppercase block">Active Watermark</span>
-            <span className="text-[#facc15] block mt-1 truncate" title={p?.watermark || 'None'}>
-              {p?.watermark || 'No watermark recorded'}
-            </span>
-          </div>
-
-          <div className="rounded-xl border border-border-subtle bg-elevated/40 p-3.5">
-            <span className="text-ink-muted text-[10px] uppercase block">Last Attempted Poll</span>
-            <span className="text-ink-secondary block mt-1">
-              {p?.last_attempted_poll
-                ? format(new Date(p.last_attempted_poll), 'yyyy-MM-dd HH:mm:ss') + ' UTC'
-                : 'Never'}
-            </span>
-          </div>
-
-          <div className="rounded-xl border border-border-subtle bg-elevated/40 p-3.5">
-            <span className="text-ink-muted text-[10px] uppercase block">Last Successful Poll</span>
-            <span className="text-accent-emerald block mt-1">
-              {p?.last_successful_poll
-                ? format(new Date(p.last_successful_poll), 'yyyy-MM-dd HH:mm:ss') + ' UTC'
-                : 'Never'}
-            </span>
-          </div>
-
-          <div className="rounded-xl border border-border-subtle bg-elevated/40 p-3.5">
-            <span className="text-ink-muted text-[10px] uppercase block">Poller Loop Status</span>
-            <span className="text-ink-primary block mt-1">
-              {p?.running ? 'Running in Background' : 'Idle / On-Demand'}
-            </span>
-          </div>
-        </div>
-
-        {/* Investigation Navigation Pivots */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border-subtle pt-4 text-xs">
-          <span className="text-ink-muted font-mono text-[11px]">
-            Ingested Wazuh telemetry feeds directly into SIEM Event Explorer and Anomaly Detection
-          </span>
-          <div className="flex items-center gap-2">
-            <Link href="/logs" className="btn-ghost text-xs py-1.5 px-3 flex items-center gap-1.5">
-              <Database className="h-3.5 w-3.5" />
-              <span>Explore Ingested Logs</span>
-            </Link>
-            <Link href="/incidents" className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5">
-              <Shield className="h-3.5 w-3.5" />
-              <span>Incident Queue</span>
-            </Link>
+            <div className="flex items-center justify-between p-2.5">
+              <span className="text-ink-secondary">Last Attempted Sync</span>
+              <span className="text-ink-muted">
+                {p?.last_attempted_poll
+                  ? format(new Date(p.last_attempted_poll), 'HH:mm:ss') + ' UTC'
+                  : '—'}
+              </span>
+            </div>
           </div>
         </div>
       </div>

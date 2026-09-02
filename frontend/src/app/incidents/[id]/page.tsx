@@ -90,7 +90,7 @@ export default function IncidentDetailPage({ params }: { params: Promise<{ id: s
     return (
       <div className="space-y-6">
         <div className="h-5 w-36 bg-elevated rounded animate-pulse" />
-        <SkeletonCard className="h-48" />
+        <div className="h-32 bg-elevated/40 rounded border border-border/60 animate-pulse" />
         <div className="grid gap-6 lg:grid-cols-2">
           <SkeletonCard className="h-80" />
           <SkeletonCard className="h-80" />
@@ -101,12 +101,12 @@ export default function IncidentDetailPage({ params }: { params: Promise<{ id: s
 
   if (error || !incident) {
     return (
-      <div className="card p-10 text-center max-w-md mx-auto mt-12 border-severity-critical/30 bg-panel">
+      <div className="max-w-md mx-auto mt-12 p-8 text-center border border-severity-critical/30 rounded-lg bg-panel">
         <AlertTriangle className="mx-auto h-8 w-8 text-severity-critical" />
         <h2 className="mt-3 text-base font-semibold text-ink-primary">Incident Record Not Found</h2>
         <p className="text-xs text-ink-secondary mt-1">{error || 'Unable to locate the specified security incident.'}</p>
         <Link href="/incidents" className="btn-primary mt-5 inline-flex items-center gap-1.5 text-xs">
-          <ChevronLeft className="h-3.5 w-3.5" /> Return to Triage Queue
+          <ChevronLeft className="h-3.5 w-3.5" /> Return to Queue
         </Link>
       </div>
     )
@@ -127,7 +127,6 @@ export default function IncidentDetailPage({ params }: { params: Promise<{ id: s
     )
   })
 
-  // Calculate temporal attack duration if dates are valid
   let durationStr = '—'
   try {
     if (incident.first_seen && incident.last_seen) {
@@ -139,20 +138,20 @@ export default function IncidentDetailPage({ params }: { params: Promise<{ id: s
 
   return (
     <div className="space-y-6">
-      {/* Top Workstation Navigation & Quick Actions Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-4">
+      {/* 1. TOP ACTION BAR */}
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border/80 pb-3">
         <Link
           href="/incidents"
           className="inline-flex items-center text-xs font-mono text-ink-secondary hover:text-ink-primary transition-colors group"
         >
           <ChevronLeft className="mr-1 h-4 w-4 transition-transform group-hover:-translate-x-0.5" />
-          <span>Back to Triage Queue</span>
+          <span>Incident Queue</span>
         </Link>
 
-        <div className="flex flex-wrap items-center gap-2.5">
-          {/* Status Mutation Dropdown with Non-Blocking Loading State */}
-          <div className="flex items-center gap-1.5 rounded-lg border border-border bg-panel px-2.5 py-1">
-            <span className="text-[11px] text-ink-muted font-mono uppercase tracking-wider">Status:</span>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Status Mutation Select */}
+          <div className="flex items-center gap-1.5 rounded border border-border/80 bg-panel px-2.5 py-1">
+            <span className="text-[11px] text-ink-muted font-mono uppercase">Status:</span>
             <select
               value={incident.status}
               disabled={updatingStatus}
@@ -168,20 +167,18 @@ export default function IncidentDetailPage({ params }: { params: Promise<{ id: s
             {updatingStatus && <Loader2 className="h-3 w-3 animate-spin text-accent-emerald ml-1" />}
           </div>
 
-          {/* Formal Report Link */}
           <Link
             href={`/incidents/${incident.id}/report`}
-            className="btn-ghost text-xs py-1.5 px-3 flex items-center gap-1.5"
-            title="Generate and view formal incident report"
+            className="btn-ghost text-xs py-1 px-3 flex items-center gap-1.5"
+            title="Generate executive report"
           >
             <FileText className="h-3.5 w-3.5" />
             <span>Formal Report</span>
           </Link>
 
-          {/* AI Copilot Primary Action */}
           <Link
             href={`/incidents/${incident.id}/chat`}
-            className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5"
+            className="btn-primary text-xs py-1 px-3 flex items-center gap-1.5"
             title="Launch interactive AI Investigation Copilot"
           >
             <MessageSquare className="h-3.5 w-3.5" />
@@ -190,141 +187,119 @@ export default function IncidentDetailPage({ params }: { params: Promise<{ id: s
         </div>
       </div>
 
-      {/* Incident Header Workstation Card */}
-      <div className="card p-5 sm:p-6 space-y-5">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="space-y-2 max-w-3xl">
-            {/* Badges & ID Strip */}
-            <div className="flex flex-wrap items-center gap-2">
-              <SeverityBadge severity={incident.severity} />
-              <StatusBadge status={incident.status} />
-              <button
-                type="button"
-                onClick={copyIncidentId}
-                className="inline-flex items-center gap-1.5 rounded border border-border bg-elevated px-2 py-0.5 font-mono text-[11px] text-ink-secondary hover:text-ink-primary hover:border-border-active transition active:scale-95"
-                title="Click to copy full incident UUID"
-              >
-                {copiedId ? <Check className="h-3 w-3 text-accent-emerald" /> : <Copy className="h-3 w-3 text-ink-muted" />}
-                <span>ID: {incident.id.slice(0, 8)}...</span>
-              </button>
-            </div>
+      {/* 2. INCIDENT DOSSIER IDENTITY SECTION (Open Canvas) */}
+      <div className="space-y-4">
+        {/* Severity, Status, Attack Vector, Confidence */}
+        <div className="flex flex-wrap items-center gap-3">
+          <SeverityBadge severity={incident.severity} />
+          <StatusBadge status={incident.status} />
 
-            {/* Title */}
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-ink-primary">
-              {incident.title}
-            </h1>
+          <button
+            type="button"
+            onClick={copyIncidentId}
+            className="inline-flex items-center gap-1.5 rounded border border-border bg-elevated px-2 py-0.5 font-mono text-[11px] text-ink-secondary hover:text-ink-primary hover:border-border-active transition-colors active:scale-95"
+            title="Click to copy UUID"
+          >
+            {copiedId ? <Check className="h-3 w-3 text-accent-emerald" /> : <Copy className="h-3 w-3 text-ink-muted" />}
+            <span>INC-{incident.id.slice(0, 8)}</span>
+          </button>
 
-            {/* Description if present */}
-            {incident.description && (
-              <p className="text-xs text-ink-secondary leading-relaxed max-w-2xl">
-                {incident.description}
-              </p>
-            )}
+          <span className="text-xs font-mono text-ink-muted">·</span>
+          <AttackTypeLabel attackType={incident.attack_type} />
 
-            {/* Attack Classification & AI Confidence */}
-            <div className="flex items-center gap-2 pt-0.5">
-              <AttackTypeLabel attackType={incident.attack_type} />
-              <span className="font-mono text-xs text-ink-muted">·</span>
-              <span className="font-mono text-xs text-ink-secondary bg-elevated px-2 py-0.5 rounded border border-border">
-                Confidence: <span className="font-bold text-ink-primary">{Math.round(incident.confidence * 100)}%</span>
-              </span>
-              <span className="font-mono text-xs text-ink-muted">·</span>
-              <span className="font-mono text-xs text-ink-muted">
-                {incident.event_count} evidence events correlated
-              </span>
-            </div>
-          </div>
+          <span className="text-xs font-mono text-ink-muted">·</span>
+          <span className="font-mono text-xs text-ink-secondary">
+            Confidence: <strong className="text-ink-primary">{Math.round(incident.confidence * 100)}%</strong>
+          </span>
+
+          <span className="text-xs font-mono text-ink-muted">·</span>
+          <span className="font-mono text-xs text-ink-muted">
+            {incident.event_count} evidence events
+          </span>
         </div>
 
-        {/* Entity / Scope Metadata Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 rounded-xl border border-border bg-canvas/70 p-3.5 font-mono text-xs">
-          <div className="p-1">
-            <span className="text-ink-muted block text-[10px] uppercase tracking-wider">Affected User</span>
-            <span className="text-[#facc15] font-semibold block mt-0.5 truncate" title={incident.affected_username || 'None'}>
+        {/* Title */}
+        <h1 className="text-2xl font-bold tracking-tight text-ink-primary">
+          {incident.title}
+        </h1>
+
+        {/* Narrative */}
+        {incident.attack_hypothesis?.narrative && (
+          <p className="text-xs text-ink-secondary leading-relaxed max-w-4xl border-l-2 border-accent-emerald/60 pl-3 py-0.5">
+            {incident.attack_hypothesis.narrative}
+          </p>
+        )}
+
+        {/* Unified Entity / Scope Horizontal Strip */}
+        <div className="rounded border border-border/80 bg-panel/60 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 divide-y sm:divide-y-0 sm:divide-x divide-border/60 text-xs font-mono">
+          <div className="p-2.5">
+            <span className="text-[10px] uppercase text-ink-muted block">Target User</span>
+            <span className="font-semibold text-[#facc15] block truncate mt-0.5" title={incident.affected_username || 'None'}>
               {incident.affected_username || '—'}
             </span>
           </div>
 
-          <div className="p-1">
-            <span className="text-ink-muted block text-[10px] uppercase tracking-wider">Host</span>
-            <span className="text-ink-primary font-semibold block mt-0.5 truncate" title={incident.affected_host || 'None'}>
+          <div className="p-2.5">
+            <span className="text-[10px] uppercase text-ink-muted block">Host</span>
+            <span className="font-semibold text-ink-primary block truncate mt-0.5" title={incident.affected_host || 'None'}>
               {incident.affected_host || '—'}
             </span>
           </div>
 
-          <div className="p-1">
-            <span className="text-ink-muted block text-[10px] uppercase tracking-wider">Source IP</span>
-            <span className="text-accent-cyan font-semibold block mt-0.5 truncate" title={incident.source_ip || 'None'}>
+          <div className="p-2.5">
+            <span className="text-[10px] uppercase text-ink-muted block">Source IP</span>
+            <span className="font-semibold text-accent-cyan block truncate mt-0.5" title={incident.source_ip || 'None'}>
               {incident.source_ip || '—'}
             </span>
           </div>
 
-          <div className="p-1">
-            <span className="text-ink-muted block text-[10px] uppercase tracking-wider">First Seen (UTC)</span>
+          <div className="p-2.5">
+            <span className="text-[10px] uppercase text-ink-muted block">First Seen (UTC)</span>
             <span className="text-ink-secondary block mt-0.5">
               {incident.first_seen ? format(new Date(incident.first_seen), 'HH:mm:ss') : '—'}
             </span>
           </div>
 
-          <div className="p-1">
-            <span className="text-ink-muted block text-[10px] uppercase tracking-wider">Last Seen (UTC)</span>
+          <div className="p-2.5">
+            <span className="text-[10px] uppercase text-ink-muted block">Last Seen (UTC)</span>
             <span className="text-ink-secondary block mt-0.5">
               {incident.last_seen ? format(new Date(incident.last_seen), 'HH:mm:ss') : '—'}
             </span>
           </div>
 
-          <div className="p-1">
-            <span className="text-ink-muted block text-[10px] uppercase tracking-wider">Temporal Span</span>
-            <span className="text-accent-emerald font-semibold block mt-0.5">
+          <div className="p-2.5">
+            <span className="text-[10px] uppercase text-ink-muted block">Duration</span>
+            <span className="font-semibold text-accent-emerald block mt-0.5">
               {durationStr}
             </span>
           </div>
         </div>
 
-        {/* Attack Narrative & Hypothesis */}
-        {incident.attack_hypothesis?.narrative && (
-          <div className="rounded-xl border border-border-subtle bg-elevated/40 p-4 text-xs text-ink-primary leading-relaxed">
-            <span className="font-mono text-[10px] uppercase font-semibold text-accent-emerald block mb-1">
-              Attack Hypothesis & Behavioral Narrative
-            </span>
-            <p className="text-ink-secondary leading-relaxed">{incident.attack_hypothesis.narrative}</p>
-          </div>
-        )}
-
-        {/* MITRE ATT&CK Matrix Mapping */}
+        {/* MITRE ATT&CK Matrix Chips */}
         {incident.techniques.length > 0 && (
-          <div className="border-t border-border-subtle pt-4">
-            <span className="font-mono text-[10px] uppercase font-semibold text-ink-muted block mb-2.5">
-              Mapped MITRE ATT&CK Techniques ({incident.techniques.length})
-            </span>
-            <div className="flex flex-wrap gap-2">
-              {incident.techniques.map((t) => (
-                <MitreTechniqueChip
-                  key={t.id}
-                  techniqueId={t.sub_technique_id || t.technique_id}
-                  techniqueName={t.sub_technique_name || t.technique_name}
-                  url={t.url}
-                />
-              ))}
-            </div>
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <span className="font-mono text-[10px] uppercase text-ink-muted">MITRE Techniques:</span>
+            {incident.techniques.map((t) => (
+              <MitreTechniqueChip
+                key={t.id}
+                techniqueId={t.sub_technique_id || t.technique_id}
+                techniqueName={t.sub_technique_name || t.technique_name}
+                url={t.url}
+              />
+            ))}
           </div>
         )}
       </div>
 
-      {/* Two-Column Investigation Workbench: Attack Progression & Evidence Locker */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Left: Chronological Attack Progression */}
-        <div className="card p-5 space-y-4">
-          <div className="flex items-center justify-between border-b border-border pb-3">
-            <div>
-              <h2 className="text-sm font-semibold text-ink-primary flex items-center gap-2">
-                <Clock className="h-4 w-4 text-accent-emerald" />
-                Chronological Attack Progression
-              </h2>
-              <p className="mt-0.5 text-xs text-ink-secondary">
-                Sequential attacker execution phases derived from evidence timestamps
-              </p>
-            </div>
+      {/* 3. TWO-COLUMN INVESTIGATION WORKBENCH (Timeline + Evidence Table) */}
+      <div className="grid gap-6 lg:grid-cols-2 pt-2">
+        {/* Left: Sequential Attack Timeline */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between border-b border-border/80 pb-2">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-ink-muted flex items-center gap-2">
+              <Clock className="h-3.5 w-3.5 text-accent-emerald" />
+              <span>Chronological Attack Progression</span>
+            </h2>
             <span className="font-mono text-[11px] text-ink-muted">
               {phases.length} Phase{phases.length === 1 ? '' : 's'}
             </span>
@@ -341,22 +316,37 @@ export default function IncidentDetailPage({ params }: { params: Promise<{ id: s
                 return (
                   <div
                     key={`${phase.phase}-${idx}`}
-                    className="relative pl-6 border-l border-border pb-4 last:pb-0"
+                    className="relative pl-6 border-l border-border/80 pb-4 last:pb-0"
                   >
                     <span className="absolute -left-2 top-0 flex h-4 w-4 items-center justify-center rounded-full border border-accent-emerald bg-panel">
                       <Icon className="h-2.5 w-2.5 text-accent-emerald" />
                     </span>
                     <div className="space-y-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-mono text-xs font-semibold uppercase tracking-wider text-ink-primary">
+                        <span className="font-mono text-xs font-bold uppercase tracking-wider text-ink-primary">
                           {phase.phase.replace(/_/g, ' ')}
                         </span>
-                        {phase.technique && <MitreTechniqueChip techniqueId={phase.technique} />}
+                        {phase.technique_name && (
+                          <span className="rounded bg-elevated px-1.5 py-0.5 font-mono text-[10px] text-accent-cyan border border-border">
+                            {phase.technique_name}
+                          </span>
+                        )}
+                        {phase.timestamp_start && (
+                          <span className="font-mono text-[10px] text-ink-muted ml-auto">
+                            {format(new Date(phase.timestamp_start), 'HH:mm:ss')} UTC
+                          </span>
+                        )}
                       </div>
-                      <p className="text-xs text-ink-secondary leading-relaxed">{phase.description}</p>
-                      <p className="font-mono text-[10px] text-ink-muted">
-                        {format(new Date(phase.timestamp_start), 'HH:mm:ss')} UTC · {phase.event_count} event{phase.event_count === 1 ? '' : 's'}
+                      <p className="text-xs text-ink-secondary leading-relaxed">
+                        {phase.description}
                       </p>
+                      {phase.technique && (
+                        <div className="pt-1">
+                          <span className="inline-flex items-center rounded border border-[#581c87]/70 bg-[#3b0764]/40 px-1.5 py-0.5 font-mono text-[10px] text-[#c084fc]">
+                            {phase.technique}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )
@@ -365,120 +355,76 @@ export default function IncidentDetailPage({ params }: { params: Promise<{ id: s
           )}
         </div>
 
-        {/* Right: Evidence Locker & Event Inspector */}
-        <div className="card p-5 space-y-4">
-          <div className="flex items-center justify-between border-b border-border pb-3">
-            <div>
-              <h2 className="text-sm font-semibold text-ink-primary flex items-center gap-2">
-                <Database className="h-4 w-4 text-accent-cyan" />
-                Evidence Locker
-              </h2>
-              <p className="mt-0.5 text-xs text-ink-secondary">
-                Underlying security telemetry events correlated into this incident
-              </p>
-            </div>
-            <span className="font-mono text-[11px] text-accent-cyan bg-accent-cyan/10 px-2 py-0.5 rounded border border-accent-cyan/20">
-              {incident.evidence.length} Record{incident.evidence.length === 1 ? '' : 's'}
+        {/* Right: Correlated Evidence Locker */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between border-b border-border/80 pb-2">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-ink-muted flex items-center gap-2">
+              <Database className="h-3.5 w-3.5 text-accent-cyan" />
+              <span>Correlated Evidence Records</span>
+            </h2>
+            <span className="font-mono text-[11px] text-ink-muted">
+              {incident.evidence.length} Events
             </span>
           </div>
 
-          {/* Evidence Search Filter */}
-          {incident.evidence.length > 3 && (
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-muted" />
-              <input
-                type="text"
-                placeholder="Filter evidence by event type, IP, or role..."
-                value={evidenceSearch}
-                onChange={(e) => setEvidenceSearch(e.target.value)}
-                className="input w-full pl-8 py-1.5 text-xs font-mono"
-              />
-            </div>
-          )}
+          {/* Evidence Quick Search */}
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-muted" />
+            <input
+              type="text"
+              placeholder="Filter evidence events…"
+              value={evidenceSearch}
+              onChange={(e) => setEvidenceSearch(e.target.value)}
+              className="input w-full pl-8 text-xs py-1.5 bg-panel/60"
+            />
+          </div>
 
-          {incident.evidence.length === 0 ? (
-            <p className="text-xs text-ink-muted py-8 text-center">
-              No correlated security evidence mapped to this incident.
-            </p>
-          ) : filteredEvidence.length === 0 ? (
+          {filteredEvidence.length === 0 ? (
             <p className="text-xs text-ink-muted py-6 text-center">
-              No evidence matching &ldquo;{evidenceSearch}&rdquo;.
+              No matching evidence events found.
             </p>
           ) : (
-            <div className="space-y-3 max-h-[540px] overflow-y-auto pr-1">
-              {filteredEvidence.map((ev, index) => (
-                <div
-                  key={ev.id}
-                  className="rounded-xl border border-border-subtle bg-canvas/50 p-3.5 hover:border-border transition"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="evidence-chip font-bold shrink-0">
-                        EV-{String(ev.sequence_order ?? index + 1).padStart(3, '0')}
-                      </span>
-                      <span className="font-mono text-xs font-medium text-ink-primary truncate">
-                        {ev.event?.event_type || 'SECURITY_EVENT'}
+            <div className="border border-border/80 rounded overflow-hidden">
+              <div className="max-h-[380px] overflow-y-auto divide-y divide-border-subtle/80">
+                {filteredEvidence.map((ev, i) => (
+                  <div
+                    key={ev.id || i}
+                    onClick={() => ev.event && setSelectedEvent(ev.event)}
+                    className={`p-2.5 transition-colors cursor-pointer hover:bg-elevated/50 ${
+                      selectedEvent?.id === ev.event_id ? 'bg-elevated' : ''
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2 text-xs font-mono">
+                      <div className="flex items-center gap-1.5">
+                        <span className="rounded px-1.5 py-0.2 bg-elevated border border-border text-[10px] text-accent-cyan font-bold">
+                          EV-{String(i + 1).padStart(3, '0')}
+                        </span>
+                        <span className="text-ink-primary font-semibold truncate max-w-[180px]">
+                          {ev.event?.event_type || ev.role || 'EVENT'}
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-ink-muted">
+                        {ev.event?.timestamp ? format(new Date(ev.event.timestamp), 'HH:mm:ss') : '—'}
                       </span>
                     </div>
-                    <span className="rounded bg-elevated px-1.5 py-0.5 font-mono text-[10px] text-ink-secondary uppercase shrink-0">
-                      {ev.role.replace(/_/g, ' ')}
-                    </span>
-                  </div>
 
-                  {ev.description && (
-                    <p className="mt-1.5 text-xs text-ink-secondary leading-relaxed">
-                      {ev.description}
+                    <p className="text-[11px] text-ink-secondary mt-1 leading-snug line-clamp-2">
+                      {ev.description || 'Contributing event telemetry'}
                     </p>
-                  )}
 
-                  <div className="mt-2.5 flex items-center justify-between font-mono text-[10px] text-ink-muted border-t border-border-subtle pt-2">
-                    <span className="truncate">
-                      {ev.event?.timestamp ? format(new Date(ev.event.timestamp), 'yyyy-MM-dd HH:mm:ss') : '—'} UTC · {ev.event?.source_ip || '—'}
-                    </span>
-                    {ev.event && (
-                      <button
-                        type="button"
-                        onClick={() => setSelectedEvent(ev.event!)}
-                        className="text-accent-cyan hover:underline flex items-center gap-1 shrink-0 ml-2"
-                      >
-                        <span>Inspect Raw</span>
-                        <Terminal className="h-3 w-3" />
-                      </button>
-                    )}
+                    <div className="flex items-center justify-between text-[10px] font-mono text-ink-muted mt-1.5">
+                      <span>IP: {ev.event?.source_ip || '—'}</span>
+                      <span className="text-accent-emerald hover:underline">Inspect Raw &gt;</span>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           )}
         </div>
       </div>
 
-      {/* AI Copilot Accelerated Investigation Bar */}
-      <div className="card p-5 flex flex-wrap items-center justify-between gap-4 border-accent-emerald/30 bg-panel">
-        <div className="flex items-center gap-3.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-accent-emerald/30 bg-accent-emerald/10 text-accent-emerald shrink-0">
-            <MessageSquare className="h-4.5 w-4.5" />
-          </div>
-          <div>
-            <h3 className="text-xs font-bold text-ink-primary">
-              AI Security Copilot Investigation
-            </h3>
-            <p className="text-[11px] text-ink-secondary mt-0.5">
-              Interact with the Copilot to formulate hypotheses, isolate root cause, and synthesize containment actions.
-            </p>
-          </div>
-        </div>
-
-        <Link
-          href={`/incidents/${incident.id}/chat`}
-          className="btn-primary text-xs py-2 px-4 flex items-center gap-1.5"
-        >
-          <span>Open AI Investigation</span>
-          <ArrowRight className="h-3.5 w-3.5" />
-        </Link>
-      </div>
-
-      {/* Raw Event Inspector Modal Drawer */}
+      {/* Raw Event Detail Drawer */}
       <EventDrawer
         event={selectedEvent}
         onClose={() => setSelectedEvent(null)}

@@ -52,19 +52,16 @@ function Answer({ message }: { message: ChatMessage }) {
 
   if (isUser) {
     return (
-      <div className="flex justify-end gap-2.5 animate-fade-in">
-        <div className="max-w-[80%] sm:max-w-[70%] rounded-lg border border-border/80 bg-elevated/70 px-4 py-2.5 text-xs text-ink-primary leading-relaxed shadow-sm">
-          <div className="flex items-center justify-between gap-4 mb-1.5 border-b border-border-subtle pb-1 text-[10px] font-mono text-ink-muted">
-            <span className="font-semibold text-ink-secondary uppercase tracking-wider">Security Analyst</span>
-            <span>
-              {message.timestamp ? format(new Date(message.timestamp), 'HH:mm:ss') : ''}
-            </span>
-          </div>
-          <p className="whitespace-pre-wrap">{message.content}</p>
+      <div className="border-l-2 border-accent-emerald/80 bg-elevated/50 p-3.5 rounded-r text-xs animate-fade-in">
+        <div className="flex items-center justify-between text-[11px] font-mono text-ink-muted mb-1">
+          <span className="font-semibold text-accent-emerald uppercase tracking-wider">
+            ANALYST INQUIRY
+          </span>
+          <span>
+            {message.timestamp ? format(new Date(message.timestamp), 'HH:mm:ss') : ''} UTC
+          </span>
         </div>
-        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-elevated border border-border text-ink-muted shadow-sm mt-0.5">
-          <User className="h-3.5 w-3.5" />
-        </div>
+        <p className="text-ink-primary whitespace-pre-wrap leading-relaxed">{message.content}</p>
       </div>
     )
   }
@@ -76,166 +73,105 @@ function Answer({ message }: { message: ChatMessage }) {
       : null
 
   return (
-    <div className="flex gap-2.5 animate-fade-in">
-      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-accent-emerald/30 bg-accent-emerald/10 text-accent-emerald shadow-sm mt-1">
-        <Bot className="h-3.5 w-3.5" />
+    <div className="border border-border/80 rounded bg-panel p-4 sm:p-5 space-y-3 animate-fade-in shadow-sm">
+      {/* Dossier Assessment Header */}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-2 text-xs font-mono">
+        <div className="flex items-center gap-2">
+          <span
+            className={`inline-flex items-center rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+              answerType === 'FACTUAL'
+                ? 'border border-[#0e7490] bg-[#083344] text-[#38bdf8]'
+                : answerType === 'INFERENCE'
+                ? 'border border-[#713f12] bg-[#422006] text-[#facc15]'
+                : answerType === 'RECOMMENDATION'
+                ? 'border border-[#065f46] bg-[#064e3b] text-[#34d399]'
+                : 'border border-[#581c87] bg-[#3b0764] text-[#c084fc]'
+            }`}
+          >
+            {answerType}
+          </span>
+          {confidence !== null && (
+            <span className="text-ink-muted text-[11px]">
+              Grounding Confidence: <strong className="text-ink-primary">{confidence}%</strong>
+            </span>
+          )}
+        </div>
+        <span className="text-[10px] text-ink-muted font-mono">
+          {message.timestamp ? format(new Date(message.timestamp), 'yyyy-MM-dd HH:mm:ss') : ''} UTC
+        </span>
       </div>
 
-      <div className="flex-1 max-w-[95%] lg:max-w-[90%] rounded-lg border border-border/80 bg-panel p-4 sm:p-5 space-y-3.5 shadow-sm">
-        {/* Confidence & Answer Type Header */}
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border-subtle pb-2.5 text-xs font-mono">
-          <div className="flex items-center gap-2">
-            <span
-              className={`inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
-                answerType === 'FACTUAL'
-                  ? 'border border-[#0e7490] bg-[#083344] text-[#38bdf8]'
-                  : answerType === 'INFERENCE'
-                  ? 'border border-[#713f12] bg-[#422006] text-[#facc15]'
-                  : answerType === 'RECOMMENDATION'
-                  ? 'border border-[#065f46] bg-[#064e3b] text-[#34d399]'
-                  : 'border border-[#581c87] bg-[#3b0764] text-[#c084fc]'
-              }`}
-            >
-              {answerType}
+      {/* Structured Investigation Report Body */}
+      <div className="text-xs text-ink-primary leading-relaxed">
+        <InvestigationReport
+          content={message.content}
+          answerType={message.answer_type}
+          confidence={message.ai_confidence}
+        />
+      </div>
+
+      {/* Grounded Evidence References */}
+      {message.evidence_ids && message.evidence_ids.length > 0 && (
+        <div className="pt-2.5 border-t border-border-subtle/80 flex flex-wrap items-center gap-1.5 text-xs font-mono">
+          <span className="text-ink-muted text-[10px] uppercase">Grounded Evidence:</span>
+          {message.evidence_ids.map((eid) => (
+            <span key={eid} className="evidence-chip">
+              {eid}
             </span>
-            {confidence !== null && (
-              <span className="text-ink-muted text-[11px]">
-                Grounding Confidence: <strong className="text-ink-primary">{confidence}%</strong>
-              </span>
-            )}
-          </div>
-          <span className="text-[10px] text-ink-muted">
-            {message.timestamp ? format(new Date(message.timestamp), 'yyyy-MM-dd HH:mm:ss') : ''}
-          </span>
+          ))}
         </div>
+      )}
 
-        {/* Structured Investigation Report Body */}
-        <div className="text-xs text-ink-primary leading-relaxed">
-          <InvestigationReport
-            content={message.content}
-            answerType={message.answer_type}
-            confidence={message.ai_confidence}
-          />
+      {/* MITRE References */}
+      {message.mitre_references && message.mitre_references.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 text-xs font-mono">
+          <span className="text-ink-muted text-[10px] uppercase">MITRE Mapping:</span>
+          {message.mitre_references.map((m) => (
+            <span key={m} className="mitre-chip">
+              {m}
+            </span>
+          ))}
         </div>
+      )}
 
-        {/* Grounded Evidence Citations */}
-        {message.evidence_ids && message.evidence_ids.length > 0 && (
-          <div className="border-t border-border-subtle pt-2.5 flex flex-wrap items-center gap-1.5 text-xs font-mono">
-            <span className="text-ink-muted text-[10px] uppercase font-semibold">Grounded Evidence:</span>
-            {message.evidence_ids.map((evId) => (
-              <span key={evId} className="evidence-chip">
-                {evId}
-              </span>
-            ))}
-          </div>
-        )}
-
-        {/* MITRE Technique References */}
-        {message.mitre_references && message.mitre_references.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5 text-xs font-mono">
-            <span className="text-ink-muted text-[10px] uppercase font-semibold">MITRE ATT&CK:</span>
-            {message.mitre_references.map((m) => (
-              <MitreTechniqueChip key={m} techniqueId={m} />
-            ))}
-          </div>
-        )}
-
-        {/* RAG Knowledge Playbooks Used */}
-        {message.rag_sources && message.rag_sources.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5 text-xs font-mono text-ink-secondary">
-            <span className="text-ink-muted text-[10px] uppercase font-semibold">Retrieved Playbooks:</span>
-            {message.rag_sources.map((src) => (
-              <span
-                key={src}
-                className="rounded bg-elevated px-2 py-0.5 text-[10px] text-ink-secondary border border-border"
-              >
-                {src}
-              </span>
-            ))}
-          </div>
-        )}
-
-        {/* Sarvam TTS Audio Controls */}
-        {message.isPersisted && (
-          <div className="border-t border-border-subtle pt-2.5">
-            <TtsControls messageId={message.id} />
-          </div>
-        )}
+      {/* Audio Synthesis Playback Controls */}
+      <div className="pt-2 border-t border-border-subtle/60">
+        <TtsControls messageId={message.id} />
       </div>
     </div>
   )
 }
 
-export default function ChatPage({ params }: { params: Promise<{ id: string }> }) {
+export default function IncidentChatPage({ params }: { params: Promise<{ id: string }> }) {
   const { error: toastError } = useToast()
 
   const [incident, setIncident] = useState<Incident | null>(null)
   const [session, setSession] = useState<string | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
-  const [sending, setSending] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [sending, setSending] = useState(false)
   const [initError, setInitError] = useState<string | null>(null)
 
   const bottom = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  // Initialize incident and session lifecycle
   useEffect(() => {
     let isMounted = true
-
     params
       .then(async ({ id }) => {
         try {
-          const nextIncident = await getIncident(id)
+          const inc = await getIncident(id)
           if (!isMounted) return
-          setIncident(nextIncident)
+          setIncident(inc)
 
-          // If incident is closed or false-positive, session creation is disallowed by backend
-          if (nextIncident.status === 'CLOSED' || nextIncident.status === 'FALSE_POSITIVE') {
-            setInitError(
-              `Incident is currently marked as ${nextIncident.status}. Reopen the incident in the Workspace to resume AI Copilot investigation.`
-            )
-            setLoading(false)
-            return
-          }
+          const sess = await createSession(id)
+          if (!isMounted) return
+          setSession(sess.session_id)
 
-          // Check if existing session can be reused from sessionStorage
-          const storageKey = `soc_copilot_session_${id}`
-          const existingSessionId =
-            typeof window !== 'undefined' ? sessionStorage.getItem(storageKey) : null
-
-          let activeSessionId = existingSessionId
-
-          if (activeSessionId) {
-            try {
-              // Attempt to load existing session messages
-              const history = await getMessages(activeSessionId)
-              if (isMounted) {
-                setSession(activeSessionId)
-                setMessages(
-                  history.messages.map((m) => ({
-                    ...m,
-                    isPersisted: m.role === 'assistant',
-                  }))
-                )
-              }
-            } catch {
-              // Existing session invalid or expired; create a new session
-              activeSessionId = null
-            }
-          }
-
-          if (!activeSessionId) {
-            const nextSession = await createSession(id)
-            if (isMounted) {
-              setSession(nextSession.session_id)
-              if (typeof window !== 'undefined') {
-                sessionStorage.setItem(storageKey, nextSession.session_id)
-              }
-              setMessages([])
-            }
-          }
+          const list = await getMessages(sess.session_id)
+          if (!isMounted) return
+          setMessages(list.messages || [])
         } catch (e) {
           if (isMounted) {
             setInitError(e instanceof Error ? e.message : 'Unable to initialize investigation session')
@@ -327,7 +263,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
   if (initError || !incident) {
     return (
-      <div className="card p-8 text-center max-w-lg mx-auto mt-12 border-severity-critical/30 bg-panel">
+      <div className="p-8 text-center max-w-lg mx-auto mt-12 border border-severity-critical/30 rounded-lg bg-panel">
         <AlertTriangle className="mx-auto h-8 w-8 text-severity-critical" />
         <h2 className="mt-3 text-base font-semibold text-ink-primary">
           Unable to Initialize Investigation Session
@@ -347,216 +283,129 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
   return (
     <div className="flex flex-col h-[calc(100vh-100px)] space-y-3">
-      {/* Top Workstation Navigation Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3 shrink-0">
+      {/* 1. TOP INCIDENT CONTEXT HEADER (Open Canvas) */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/80 pb-3 shrink-0">
         <div>
           <Link
             href={`/incidents/${incident.id}`}
             className="inline-flex items-center text-xs font-mono text-ink-secondary hover:text-ink-primary transition-colors group"
           >
             <ChevronLeft className="mr-1 h-3.5 w-3.5 transition-transform group-hover:-translate-x-0.5" />
-            <span>Back to Incident Workspace</span>
+            <span>Incident Workspace (INC-{incident.id.slice(0, 8)})</span>
           </Link>
 
-          <div className="mt-1 flex flex-wrap items-center gap-2">
-            <h1 className="text-base font-bold text-ink-primary flex items-center gap-1.5">
-              <Sparkles className="h-4 w-4 text-accent-emerald" />
-              <span>AI Investigation Copilot</span>
+          <div className="flex flex-wrap items-center gap-2 mt-1">
+            <h1 className="text-base font-bold text-ink-primary truncate max-w-xl">
+              {incident.title}
             </h1>
             <SeverityBadge severity={incident.severity} />
-            <StatusBadge status={incident.status} />
-            <span className="font-mono text-xs text-ink-secondary truncate max-w-md">
-              {incident.title}
+            <span className="font-mono text-xs text-ink-muted">·</span>
+            <span className="font-mono text-xs text-ink-secondary">
+              Confidence: <strong className="text-ink-primary">{Math.round(incident.confidence * 100)}%</strong>
             </span>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Link
-            href={`/incidents/${incident.id}/report`}
-            className="btn-ghost text-xs py-1.5 px-3 flex items-center gap-1.5"
-            title="Open formal executive report"
-          >
-            <FileText className="h-3.5 w-3.5" />
-            <span>Formal Report</span>
-          </Link>
-        </div>
+        <Link
+          href={`/incidents/${incident.id}/report`}
+          className="btn-ghost text-xs py-1 px-3 flex items-center gap-1.5"
+        >
+          <FileText className="h-3.5 w-3.5" />
+          <span>Formal Report</span>
+        </Link>
       </div>
 
-      {/* Main Two-Column Layout */}
-      <div className="flex-1 flex gap-4 min-h-0">
-        {/* Left Column: Incident Telemetry & Scope Sidebar */}
-        <div className="hidden lg:flex w-72 shrink-0 flex-col space-y-3 overflow-y-auto pr-1">
-          {/* Incident Telemetry Card */}
-          <div className="card p-4 space-y-3 text-xs">
-            <div className="flex items-center justify-between border-b border-border-subtle pb-2">
-              <span className="font-mono text-[10px] uppercase font-semibold text-ink-muted">
-                Investigation Scope
-              </span>
-              <span className="inline-flex items-center gap-1 text-[10px] font-mono text-accent-emerald">
-                <span className="h-1.5 w-1.5 rounded-full bg-accent-emerald animate-pulse" />
-                <span>Connected</span>
-              </span>
-            </div>
-
-            <div className="space-y-2.5 font-mono text-[11px]">
-              <div>
-                <span className="text-ink-muted block text-[10px] uppercase">Attack Vector</span>
-                <div className="mt-0.5">
-                  <AttackTypeLabel attackType={incident.attack_type} />
-                </div>
-              </div>
-
-              <div>
-                <span className="text-ink-muted block text-[10px] uppercase">Target User</span>
-                <span className="text-[#facc15] font-semibold block mt-0.5 truncate">
-                  {incident.affected_username || '—'}
-                </span>
-              </div>
-
-              <div>
-                <span className="text-ink-muted block text-[10px] uppercase">Host</span>
-                <span className="text-ink-primary font-semibold block mt-0.5 truncate">
-                  {incident.affected_host || '—'}
-                </span>
-              </div>
-
-              <div>
-                <span className="text-ink-muted block text-[10px] uppercase">Source IP</span>
-                <span className="text-accent-cyan font-semibold block mt-0.5 truncate">
-                  {incident.source_ip || '—'}
-                </span>
-              </div>
-
-              <div>
-                <span className="text-ink-muted block text-[10px] uppercase">Evidence Base</span>
-                <span className="text-accent-emerald font-semibold block mt-0.5">
-                  {incident.event_count} telemetry events
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Quick Investigation Inquiries */}
-          <div className="card p-4 space-y-2.5 flex-1">
-            <span className="font-mono text-[10px] uppercase font-semibold text-ink-muted block">
-              Suggested Inquiries
-            </span>
-            <div className="space-y-1.5">
-              {SUGGESTIONS.map((q) => (
+      {/* 2. INVESTIGATION WORKBENCH FEED */}
+      <div className="flex-1 overflow-y-auto pr-1 space-y-4">
+        {messages.length === 0 ? (
+          <div className="p-8 text-center border border-border/80 rounded bg-panel/40 space-y-3 max-w-2xl mx-auto my-8">
+            <Sparkles className="mx-auto h-7 w-7 text-accent-emerald" />
+            <h3 className="text-sm font-bold text-ink-primary">
+              AI Investigation Copilot Active
+            </h3>
+            <p className="text-xs text-ink-secondary leading-relaxed max-w-lg mx-auto">
+              Ask questions to correlate evidence, evaluate attack vectors, and inspect remediation protocols grounded directly in this incident&apos;s database telemetry.
+            </p>
+            <div className="pt-2 flex flex-wrap justify-center gap-2">
+              {SUGGESTIONS.map((sug) => (
                 <button
-                  key={q}
+                  key={sug}
                   type="button"
-                  onClick={() => send(q)}
+                  onClick={() => send(sug)}
                   disabled={sending}
-                  className="w-full rounded-lg border border-border-subtle bg-elevated/60 p-2 text-left text-xs text-ink-secondary hover:text-ink-primary hover:border-border hover:bg-elevated transition active:scale-[0.98] disabled:opacity-50"
+                  className="rounded border border-border/80 bg-elevated/60 px-2.5 py-1 text-xs text-ink-secondary hover:text-ink-primary hover:border-border-active transition-colors text-left"
                 >
-                  {q}
+                  {sug}
                 </button>
               ))}
             </div>
           </div>
+        ) : (
+          messages.map((m) => <Answer key={m.id} message={m} />)
+        )}
+
+        {sending && (
+          <div className="border border-accent-emerald/30 rounded bg-panel p-4 space-y-2 animate-pulse-subtle">
+            <div className="flex items-center gap-2 text-xs font-mono text-accent-emerald">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              <span>Correlating database evidence and synthesizing response…</span>
+            </div>
+          </div>
+        )}
+
+        <div ref={bottom} />
+      </div>
+
+      {/* 3. INVESTIGATION COMPOSER TOOLBAR */}
+      <div className="pt-2 border-t border-border/80 shrink-0 space-y-2">
+        {/* Quick Suggestion Chips */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="font-mono text-[10px] uppercase text-ink-muted">Inquiries:</span>
+          {SUGGESTIONS.map((sug) => (
+            <button
+              key={sug}
+              type="button"
+              onClick={() => send(sug)}
+              disabled={sending}
+              className="rounded bg-elevated/70 px-2 py-0.5 text-[11px] text-ink-secondary hover:text-ink-primary border border-border/60 hover:border-border transition-colors truncate max-w-[260px]"
+            >
+              {sug}
+            </button>
+          ))}
         </div>
 
-        {/* Right Column: Chat Messages & Input Composer */}
-        <div className="flex-1 flex flex-col min-w-0 card p-4 overflow-hidden">
-          {/* Scrollable Message History */}
-          <div className="flex-1 space-y-4 overflow-y-auto pr-2 pb-2">
-            {messages.length === 0 && (
-              <div className="rounded-xl border border-border-subtle bg-canvas/40 p-6">
-                <div className="flex gap-3.5">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-accent-emerald/40 bg-accent-emerald/10 text-accent-emerald">
-                    <Bot className="h-5 w-5" />
-                  </div>
-                  <div className="space-y-3">
-                    <div>
-                      <h3 className="text-sm font-semibold text-ink-primary">
-                        Evidence-Grounded AI Security Copilot
-                      </h3>
-                      <p className="mt-1 text-xs text-ink-secondary leading-relaxed">
-                        Formulate hypotheses, dissect attack patterns, and review containment options.
-                        Every response is grounded in correlated security events, mapped to MITRE ATT&CK
-                        techniques, and supported by security playbooks.
-                      </p>
-                    </div>
-
-                    <div className="space-y-2 pt-1">
-                      <span className="text-[10px] font-mono uppercase tracking-wider text-ink-muted block">
-                        Click to initiate inquiry:
-                      </span>
-                      <div className="flex flex-wrap gap-2">
-                        {SUGGESTIONS.map((q) => (
-                          <button
-                            key={q}
-                            type="button"
-                            onClick={() => send(q)}
-                            disabled={sending}
-                            className="rounded-lg border border-border bg-elevated px-3 py-1.5 text-xs text-ink-secondary hover:text-ink-primary hover:border-border-active transition text-left"
-                          >
-                            {q}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {messages.map((m) => (
-              <Answer key={m.id} message={m} />
-            ))}
-
-            {/* AI Synthesizing State */}
-            {sending && (
-              <div className="flex gap-3 animate-fade-in">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-accent-emerald/40 bg-accent-emerald/10 text-accent-emerald shadow-sm">
-                  <Bot className="h-4 w-4" />
-                </div>
-                <div className="rounded-2xl border border-border bg-panel px-4 py-3 text-xs text-ink-secondary flex items-center gap-2 shadow-sm">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin text-accent-emerald" />
-                  <span>Analyzing evidence telemetry and synthesizing tactical response…</span>
-                </div>
-              </div>
-            )}
-
-            <div ref={bottom} />
-          </div>
-
-          {/* Sticky Analyst Composer */}
-          <div className="border-t border-border pt-3 shrink-0">
-            <div className="flex gap-2">
-              <textarea
-                ref={textareaRef}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault()
-                    send()
-                  }
-                }}
-                placeholder="Ask AI Copilot about this incident (e.g. 'Identify lateral movement indicators')..."
-                rows={2}
-                disabled={sending}
-                className="input flex-1 resize-none font-sans text-xs py-2.5 disabled:opacity-50"
-              />
-
-              <button
-                type="button"
-                onClick={() => send()}
-                disabled={!input.trim() || sending}
-                className="btn-primary px-4 self-end h-10 disabled:opacity-30 flex items-center justify-center"
-                title="Send inquiry"
-              >
-                {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              </button>
-            </div>
-
-            <p className="mt-1.5 flex items-center gap-1 font-mono text-[10px] text-ink-muted">
-              <AlertCircle className="h-3 w-3 shrink-0" />
-              <span>Press Enter to send · Shift+Enter for new line · Grounded in verified telemetry</span>
-            </p>
+        {/* Input Bar */}
+        <div className="relative flex items-center">
+          <textarea
+            ref={textareaRef}
+            rows={2}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault()
+                send()
+              }
+            }}
+            placeholder="Formulate investigation inquiry (Press Cmd+Enter to execute)…"
+            className="input w-full pr-28 py-2 resize-none bg-panel/70 text-xs"
+          />
+          <div className="absolute right-2.5 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => send()}
+              disabled={!input.trim() || sending}
+              className="btn-primary text-xs py-1 px-3 flex items-center gap-1.5 disabled:opacity-40"
+            >
+              {sending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <>
+                  <span>Execute</span>
+                  <Send className="h-3 w-3" />
+                </>
+              )}
+            </button>
           </div>
         </div>
       </div>

@@ -2,51 +2,49 @@
 
 import React, { useState } from 'react'
 import Link from 'next/link'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
 import {
   AlertCircle,
-  AlertTriangle,
   ArrowRight,
   Check,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   Clock,
-  Code2,
+  Code,
   Copy,
   Database,
   ExternalLink,
   Filter,
-  HelpCircle,
   History,
+  Info,
   Loader2,
-  RotateCcw,
+  RefreshCw,
   Search,
   Send,
   Server,
   Shield,
   ShieldAlert,
-  Sparkles,
   Terminal,
   User,
   Wifi,
   X,
+  Zap,
 } from 'lucide-react'
 
 import { sendNLQuery } from '@/lib/api'
 import type { NLQueryResponse } from '@/lib/types'
-import { SeverityBadge } from '@/components/ui/badges'
 import { useToast } from '@/components/ui/Toast'
 
 const EXAMPLE_QUERIES = [
-  'Show failed logins from 192.168.1.100',
-  'List critical incidents involving admin',
-  'Find sudo privilege escalations',
-  'Show brute force attacks in the last 24 hours',
+  'Show failed logins from 10.10.5.200',
+  'Find privilege escalation events for admin',
+  'List critical severity incidents',
+  'Events with action AUTH_FAILURE',
 ]
 
-const MAX_HISTORY = 6
+const MAX_HISTORY = 5
 
-export default function QueryStudioPage() {
+export default function QueryPage() {
   const { success, error: toastError } = useToast()
 
   const [question, setQuestion] = useState('')
@@ -115,58 +113,55 @@ export default function QueryStudioPage() {
     setTimeout(() => setCopiedAnswer(false), 2000)
   }
 
-  // Derive contextual pivots based on extracted query filters
-  const extractedIps = response?.resolved_filters?.ips || []
-  const extractedUsers = response?.resolved_filters?.usernames || []
-  const extractedSeverities = response?.resolved_filters?.severities || []
-  const extractedEventTypes = response?.resolved_filters?.event_types || []
+  const extractedIps: string[] = response?.resolved_filters?.ips || []
+  const extractedUsers: string[] = response?.resolved_filters?.usernames || []
+  const extractedSeverities: string[] = response?.resolved_filters?.severities || []
+  const extractedEventTypes: string[] = response?.resolved_filters?.event_types || []
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
-      {/* Header */}
-      <div className="border-b border-border pb-5">
+      {/* 1. HEADER */}
+      <div className="border-b border-border/80 pb-4">
         <div className="flex flex-wrap items-center gap-2.5">
           <h1 className="text-xl font-bold tracking-tight text-ink-primary">
-            Deterministic NLU Query Studio
+            NLU Query Studio
           </h1>
-          <span className="flex items-center gap-1 rounded-full border border-accent-emerald/30 bg-accent-emerald/10 px-2.5 py-0.5 font-mono text-[10px] font-semibold text-accent-emerald">
-            <Terminal className="h-3 w-3" />
-            <span>Zero-LLM SQL Translation</span>
+          <span className="rounded bg-elevated px-2 py-0.5 font-mono text-[11px] font-semibold text-accent-emerald border border-border">
+            Deterministic Zero-LLM SQL Translation
           </span>
         </div>
         <p className="mt-1 text-xs text-ink-secondary leading-relaxed">
-          Formulate security investigation questions in natural language. Translated deterministically
-          into SQL QuerySpecs and executed directly against the database with zero hallucination risk.
+          Ask security investigation questions in natural language. Deterministically translated into SQL QuerySpecs and executed directly against the SIEM database.
         </p>
       </div>
 
-      {/* Query Terminal Input Card */}
-      <div className="card p-5 sm:p-6 border-border bg-panel space-y-4 shadow-sm">
+      {/* 2. QUERY TERMINAL CONSOLE */}
+      <div className="rounded-lg border border-border/80 bg-panel/80 p-4 space-y-3 shadow-sm">
         <form
           onSubmit={(e) => {
             e.preventDefault()
             handleQuery()
           }}
-          className="space-y-3.5"
+          className="space-y-3"
         >
           <div className="relative">
-            <div className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-accent-emerald font-mono text-sm font-bold">
+            <div className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-accent-emerald font-mono text-sm font-bold">
               &gt;
             </div>
             <input
               type="text"
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
-              placeholder="Enter investigation query (e.g. 'Show failed logins from 10.10.5.200')..."
-              className="input w-full pl-9 pr-28 font-mono text-xs py-3 bg-canvas/70"
+              placeholder="Enter investigation query (e.g. 'Show failed logins from 10.10.5.200')…"
+              className="input w-full pl-8 pr-24 font-mono text-xs py-2.5 bg-canvas/60"
             />
             <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
               {question && (
                 <button
                   type="button"
                   onClick={() => setQuestion('')}
-                  aria-label="Clear query text"
-                  className="p-1 text-ink-muted hover:text-ink-primary transition"
+                  aria-label="Clear query"
+                  className="p-1 text-ink-muted hover:text-ink-primary transition-colors"
                 >
                   <X className="h-3.5 w-3.5" />
                 </button>
@@ -174,12 +169,12 @@ export default function QueryStudioPage() {
               <button
                 type="submit"
                 disabled={!question.trim() || loading}
-                className="btn-primary text-xs py-1.5 px-3.5 disabled:opacity-40 flex items-center gap-1.5"
+                className="btn-primary text-xs py-1 px-3 disabled:opacity-40 flex items-center gap-1.5"
               >
                 {loading ? (
                   <>
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    <span>Executing</span>
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    <span>Querying…</span>
                   </>
                 ) : (
                   <>
@@ -191,11 +186,9 @@ export default function QueryStudioPage() {
             </div>
           </div>
 
-          {/* Sample Query Inquiries */}
-          <div className="flex flex-wrap items-center gap-2 pt-0.5">
-            <span className="text-[10px] font-mono uppercase tracking-wider text-ink-muted">
-              Sample Queries:
-            </span>
+          {/* Quick Example Queries */}
+          <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+            <span className="text-[10px] font-mono uppercase text-ink-muted">Inquiries:</span>
             {EXAMPLE_QUERIES.map((example) => (
               <button
                 key={example}
@@ -205,19 +198,19 @@ export default function QueryStudioPage() {
                   handleQuery(example)
                 }}
                 disabled={loading}
-                className="rounded-lg border border-border bg-elevated/70 px-2.5 py-1 font-mono text-[11px] text-ink-secondary hover:text-ink-primary hover:border-border-active transition active:scale-95 disabled:opacity-50"
+                className="rounded border border-border/80 bg-elevated/50 px-2 py-0.5 font-sans text-[11px] text-ink-secondary hover:text-ink-primary hover:border-border-active transition-colors disabled:opacity-50"
               >
                 {example}
               </button>
             ))}
           </div>
 
-          {/* Local Session History */}
+          {/* Session History Strip */}
           {history.length > 0 && (
-            <div className="flex flex-wrap items-center gap-2 border-t border-border-subtle pt-3 text-[11px] font-mono">
-              <span className="text-ink-muted flex items-center gap-1 text-[10px] uppercase tracking-wider">
+            <div className="flex flex-wrap items-center gap-2 border-t border-border-subtle pt-2.5 text-[11px] font-mono">
+              <span className="text-ink-muted flex items-center gap-1 text-[10px] uppercase">
                 <History className="h-3 w-3" />
-                <span>Session History:</span>
+                <span>Recent:</span>
               </span>
               <div className="flex flex-wrap items-center gap-1.5 flex-1">
                 {history.map((h, i) => (
@@ -229,7 +222,7 @@ export default function QueryStudioPage() {
                       handleQuery(h)
                     }}
                     disabled={loading}
-                    className="rounded bg-elevated px-2 py-0.5 text-[10px] text-ink-secondary hover:text-ink-primary border border-border-subtle hover:border-border transition truncate max-w-[200px]"
+                    className="rounded bg-elevated px-2 py-0.5 text-[10px] text-ink-secondary hover:text-ink-primary border border-border-subtle/80 hover:border-border transition-colors truncate max-w-[200px]"
                     title={h}
                   >
                     {h}
@@ -239,8 +232,8 @@ export default function QueryStudioPage() {
               <button
                 type="button"
                 onClick={clearHistory}
-                className="text-[10px] text-ink-muted hover:text-severity-critical transition"
-                title="Clear local session query history"
+                className="text-[10px] text-ink-muted hover:text-severity-critical transition-colors"
+                title="Clear local session history"
               >
                 Clear
               </button>
@@ -251,183 +244,119 @@ export default function QueryStudioPage() {
 
       {/* Non-blocking Error Notice */}
       {error && (
-        <div className="flex items-center gap-3 rounded-xl border border-severity-critical/30 bg-severity-critical/10 p-4 text-xs text-severity-critical animate-fade-in">
+        <div className="flex items-center gap-3 rounded border border-severity-critical/30 bg-severity-critical/10 p-3 text-xs text-severity-critical animate-fade-in">
           <AlertCircle className="h-4 w-4 shrink-0" />
           <span>{error}</span>
         </div>
       )}
 
-      {/* Loading Execution Progress State */}
+      {/* Loading State */}
       {loading && (
-        <div className="card p-10 text-center border-border bg-panel space-y-3 animate-pulse-subtle">
-          <Loader2 className="mx-auto h-7 w-7 animate-spin text-accent-emerald" />
-          <h3 className="text-sm font-bold text-ink-primary">
-            Parsing Natural Language & Executing SQL QuerySpec
+        <div className="p-8 text-center border border-border/80 rounded bg-panel space-y-2 animate-pulse-subtle">
+          <Loader2 className="mx-auto h-6 w-6 animate-spin text-accent-emerald" />
+          <h3 className="text-xs font-bold text-ink-primary font-mono">
+            Translating Natural Query to SQL QuerySpec…
           </h3>
-          <p className="text-xs text-ink-secondary max-w-sm mx-auto leading-relaxed">
-            Extracting entities, resolving investigation intent, and querying structured security logs…
-          </p>
         </div>
       )}
 
-      {/* Query Result Card */}
+      {/* 3. STRUCTURED QUERY RESULTS & EVIDENCE WORKBENCH */}
       {response && !loading && (
-        <div className="card p-5 sm:p-6 border-border bg-panel space-y-5 animate-fade-in shadow-sm">
-          {/* Query Result Header Strip */}
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border-subtle pb-4">
-            <div>
-              <span className="font-mono text-[10px] uppercase text-ink-muted tracking-wider block">
-                Executed Natural Query
-              </span>
-              <p className="font-mono text-xs text-accent-cyan font-semibold mt-0.5">
-                &ldquo;{lastQuery}&rdquo;
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2 font-mono text-xs">
-              <span className="rounded-md bg-elevated px-2.5 py-1 border border-border text-ink-primary">
-                Matches: <strong className="text-accent-emerald">{response.result_count}</strong>
-              </span>
-              {response.resolved_intent && (
-                <span className="rounded-md border border-[#0e7490] bg-[#083344] px-2.5 py-1 text-accent-cyan uppercase text-[10px] font-bold">
-                  Intent: {response.resolved_intent}
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Clarification State if requested by NLU engine */}
-          {response.needs_clarification && (
-            <div className="rounded-xl border border-[#713f12] bg-[#422006]/40 p-4 space-y-3">
-              <div className="flex items-center gap-2 text-xs font-semibold text-[#facc15]">
-                <HelpCircle className="h-4 w-4" />
-                <span>Clarification Required by Engine</span>
+        <div className="space-y-4 animate-fade-in">
+          {/* Query Resolution Header */}
+          <div className="rounded border border-border/80 bg-panel/70 p-4 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-3">
+              <div>
+                <span className="font-mono text-[10px] uppercase text-ink-muted block">Query Scope</span>
+                <p className="font-mono text-xs font-bold text-ink-primary mt-0.5">
+                  &ldquo;{lastQuery}&rdquo;
+                </p>
               </div>
-              <p className="text-xs text-ink-primary">
-                {response.clarification_question || 'Please specify the exact entity or intent for your query.'}
-              </p>
-              {response.clarification_options && response.clarification_options.length > 0 && (
-                <div className="flex flex-wrap gap-2 pt-1">
-                  {response.clarification_options.map((opt) => (
-                    <button
-                      key={opt}
-                      type="button"
-                      onClick={() => {
-                        setQuestion(opt)
-                        handleQuery(opt)
-                      }}
-                      className="rounded-lg border border-[#713f12] bg-elevated px-3 py-1.5 text-xs text-[#facc15] hover:bg-[#422006] transition font-mono"
-                    >
-                      {opt}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
 
-          {/* Database Fact Answer Box */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="font-mono text-[10px] uppercase text-ink-muted tracking-wider block">
-                Database Answer (Deterministic Fact)
-              </span>
+              <div className="flex items-center gap-2 font-mono text-xs">
+                <span className="rounded bg-elevated px-2 py-0.5 border border-border text-ink-primary">
+                  Matches: <strong className="text-accent-emerald">{response.result_count}</strong>
+                </span>
+                {response.resolved_intent && (
+                  <span className="rounded border border-[#0e7490] bg-[#083344]/80 px-2 py-0.5 text-accent-cyan uppercase text-[10px] font-bold">
+                    {response.resolved_intent}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Extracted Entity Tags */}
+            <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
+              <span className="text-ink-muted text-[10px] uppercase">Extracted Entities:</span>
+              {extractedIps.length === 0 &&
+                extractedUsers.length === 0 &&
+                extractedSeverities.length === 0 &&
+                extractedEventTypes.length === 0 && (
+                  <span className="text-ink-muted text-[11px]">—</span>
+                )}
+              {extractedIps.map((ip: string) => (
+                <span key={ip} className="rounded bg-elevated px-1.5 py-0.5 text-accent-cyan border border-border">
+                  IP: {ip}
+                </span>
+              ))}
+              {extractedUsers.map((u: string) => (
+                <span key={u} className="rounded bg-elevated px-1.5 py-0.5 text-[#facc15] border border-border">
+                  User: {u}
+                </span>
+              ))}
+              {extractedSeverities.map((s: string) => (
+                <span key={s} className="rounded bg-elevated px-1.5 py-0.5 text-severity-high border border-border">
+                  Sev: {s}
+                </span>
+              ))}
+              {extractedEventTypes.map((e: string) => (
+                <span key={e} className="rounded bg-elevated px-1.5 py-0.5 text-accent-emerald border border-border">
+                  Type: {e}
+                </span>
+              ))}
+            </div>
+
+            {/* Natural Language Response Body */}
+            <div className="p-3.5 rounded bg-canvas/70 border border-border/80 flex items-start justify-between gap-3 text-xs leading-relaxed text-ink-primary">
+              <p className="whitespace-pre-wrap">{response.answer}</p>
               <button
                 type="button"
                 onClick={copyAnswer}
-                className="inline-flex items-center gap-1 font-mono text-[11px] text-ink-secondary hover:text-ink-primary transition"
+                className="text-ink-muted hover:text-ink-primary transition-colors shrink-0 p-1"
+                title="Copy Answer"
               >
                 {copiedAnswer ? (
-                  <>
-                    <Check className="h-3 w-3 text-accent-emerald" />
-                    <span className="text-accent-emerald">Copied</span>
-                  </>
+                  <Check className="h-3.5 w-3.5 text-accent-emerald" />
                 ) : (
-                  <>
-                    <Copy className="h-3 w-3" />
-                    <span>Copy Answer</span>
-                  </>
+                  <Copy className="h-3.5 w-3.5" />
                 )}
               </button>
             </div>
-
-            <div className="rounded-xl border border-border bg-canvas/70 p-4 font-mono text-xs text-ink-primary leading-relaxed whitespace-pre-wrap">
-              {response.answer}
-            </div>
           </div>
 
-          {/* Extracted QuerySpec Entities Grid */}
-          {response.resolved_filters && (
-            <div className="border-t border-border-subtle pt-4 space-y-3">
-              <div className="flex items-center gap-2 text-xs font-semibold text-ink-primary">
-                <Code2 className="h-3.5 w-3.5 text-accent-emerald" />
-                <span>Extracted QuerySpec Entities & Constraints</span>
-              </div>
+          {/* 4. DYNAMIC INVESTIGATION PIVOTS */}
+          <div className="flex flex-wrap items-center justify-end gap-2 text-xs">
+            <Link href="/logs" className="btn-ghost text-xs py-1 px-3 flex items-center gap-1.5">
+              <Database className="h-3.5 w-3.5" />
+              <span>Explore All Logs</span>
+            </Link>
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5 font-mono text-[11px]">
-                {Object.entries(response.resolved_filters).map(([k, v]) => {
-                  if (v === null || v === undefined || (Array.isArray(v) && v.length === 0)) return null
-                  const displayVal = Array.isArray(v) ? v.join(', ') : String(v)
-                  return (
-                    <div key={k} className="rounded-lg border border-border-subtle bg-elevated/40 p-2.5">
-                      <span className="text-ink-muted block text-[10px] uppercase">{k}</span>
-                      <span className="text-accent-cyan font-medium block mt-0.5 truncate" title={displayVal}>
-                        {displayVal}
-                      </span>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Investigation Pivots Toolbar */}
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border-subtle pt-4 text-xs">
-            <div className="flex flex-wrap items-center gap-2">
-              {extractedIps.length > 0 && (
-                <Link
-                  href={`/logs?source_ip=${extractedIps[0]}`}
-                  className="btn-ghost text-xs py-1.5 px-2.5 flex items-center gap-1.5"
-                  title={`Pivot to SIEM logs for IP ${extractedIps[0]}`}
-                >
-                  <Wifi className="h-3.5 w-3.5 text-accent-cyan" />
-                  <span>Filter Logs: {extractedIps[0]}</span>
-                </Link>
-              )}
-
-              {extractedUsers.length > 0 && (
-                <Link
-                  href={`/logs?username=${extractedUsers[0]}`}
-                  className="btn-ghost text-xs py-1.5 px-2.5 flex items-center gap-1.5"
-                  title={`Pivot to SIEM logs for user ${extractedUsers[0]}`}
-                >
-                  <User className="h-3.5 w-3.5 text-[#facc15]" />
-                  <span>Filter Logs: {extractedUsers[0]}</span>
-                </Link>
-              )}
-
-              {extractedSeverities.length > 0 && (
-                <Link
-                  href={`/incidents?severity=${extractedSeverities[0]}`}
-                  className="btn-ghost text-xs py-1.5 px-2.5 flex items-center gap-1.5"
-                  title={`Pivot to incidents with severity ${extractedSeverities[0]}`}
-                >
-                  <ShieldAlert className="h-3.5 w-3.5 text-severity-critical" />
-                  <span>View {extractedSeverities[0]} Incidents</span>
-                </Link>
-              )}
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Link href="/logs" className="btn-ghost text-xs py-1.5 px-3 flex items-center gap-1">
-                <Database className="h-3.5 w-3.5" />
-                <span>SIEM Explorer</span>
+            {extractedIps.map((ip: string) => (
+              <Link
+                key={ip}
+                href={`/logs?source_ip=${encodeURIComponent(ip)}`}
+                className="btn-ghost text-xs py-1 px-3 flex items-center gap-1.5 text-accent-cyan border-accent-cyan/30"
+              >
+                <Wifi className="h-3.5 w-3.5" />
+                <span>Filter Logs: {ip}</span>
               </Link>
-              <Link href="/incidents" className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1">
-                <Shield className="h-3.5 w-3.5" />
-                <span>Incident Queue</span>
-              </Link>
-            </div>
+            ))}
+
+            <Link href="/incidents" className="btn-primary text-xs py-1 px-3 flex items-center gap-1.5">
+              <Shield className="h-3.5 w-3.5" />
+              <span>Incident Queue</span>
+              <ArrowRight className="h-3 w-3" />
+            </Link>
           </div>
         </div>
       )}

@@ -69,7 +69,6 @@ export default function DashboardPage() {
     load()
   }, [load])
 
-  // Auto-refresh interval (every 30 seconds if enabled)
   useEffect(() => {
     if (!autoRefresh) return
     const timer = setInterval(() => {
@@ -78,36 +77,29 @@ export default function DashboardPage() {
     return () => clearInterval(timer)
   }, [autoRefresh, load])
 
-  // Initial skeleton view
   if (loading && !summary) {
     return (
       <div className="space-y-6">
-        <div className="flex items-center justify-between border-b border-border pb-4">
+        <div className="flex items-center justify-between border-b border-border/60 pb-4">
           <div className="space-y-2">
             <div className="h-6 w-52 bg-elevated rounded animate-pulse" />
             <div className="h-3.5 w-72 bg-elevated/60 rounded animate-pulse" />
           </div>
         </div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <SkeletonCard />
-          <SkeletonCard />
-          <SkeletonCard />
-          <SkeletonCard />
-        </div>
+        <div className="h-20 bg-elevated/40 rounded border border-border/60 animate-pulse" />
+        <SkeletonTable rows={6} cols={7} />
         <div className="grid gap-6 lg:grid-cols-2">
           <SkeletonCard />
           <SkeletonCard />
         </div>
-        <SkeletonTable rows={5} cols={7} />
       </div>
     )
   }
 
-  // Full error view on first load failure
   if (error && !summary) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center p-6">
-        <div className="card max-w-md p-6 text-center border-severity-critical/30 bg-panel">
+        <div className="max-w-md p-6 text-center border border-severity-critical/30 bg-panel rounded-lg">
           <AlertTriangle className="mx-auto h-8 w-8 text-severity-critical" />
           <h2 className="mt-3 text-base font-semibold text-ink-primary">
             Command Center Telemetry Offline
@@ -138,17 +130,15 @@ export default function DashboardPage() {
   const flagRate = processed > 0 ? ((flagged / processed) * 100).toFixed(1) : '0.0'
   const conversionRate = flagged > 0 ? ((totalInc / flagged) * 100).toFixed(1) : '0.0'
 
-  // Deterministic posture state
   const posture =
     criticalCount > 0
-      ? { label: 'CRITICAL ATTENTION REQUIRED', border: 'border-[#7f1d1d]', bg: 'bg-[#450a0a]', text: 'text-[#f87171]', dot: 'bg-[#ef4444]' }
+      ? { label: 'CRITICAL ATTENTION REQUIRED', text: 'text-severity-critical', dot: 'bg-severity-critical' }
       : highCount > 0
-      ? { label: 'ELEVATED THREAT DETECTED', border: 'border-[#7c2d12]', bg: 'bg-[#431407]', text: 'text-[#fb923c]', dot: 'bg-[#f97316]' }
+      ? { label: 'ELEVATED THREAT DETECTED', text: 'text-severity-high', dot: 'bg-severity-high' }
       : openInc > 0
-      ? { label: 'ACTIVE TRIAGE IN PROGRESS', border: 'border-[#713f12]', bg: 'bg-[#422006]', text: 'text-[#facc15]', dot: 'bg-[#eab308]' }
-      : { label: 'SYSTEM NOMINAL — NO ACTIVE INCIDENTS', border: 'border-[#064e3b]', bg: 'bg-[#022c22]', text: 'text-[#34d399]', dot: 'bg-[#10b981]' }
+      ? { label: 'ACTIVE TRIAGE IN PROGRESS', text: 'text-severity-medium', dot: 'bg-severity-medium' }
+      : { label: 'SYSTEM NOMINAL — NO ACTIVE INCIDENTS', text: 'text-accent-emerald', dot: 'bg-accent-emerald' }
 
-  // Sorted attack types
   const sortedAttackTypes = Object.entries(s.incidents_by_type || {}).sort((a, b) => b[1] - a[1])
 
   return (
@@ -157,7 +147,7 @@ export default function DashboardPage() {
       {error && summary && (
         <div
           role="alert"
-          className="flex items-center justify-between rounded-lg border border-severity-critical/40 bg-[#450a0a]/80 px-4 py-2 text-xs text-severity-critical animate-fade-in"
+          className="flex items-center justify-between rounded border border-severity-critical/30 bg-[#450a0a]/40 px-4 py-2 text-xs text-severity-critical animate-fade-in"
         >
           <div className="flex items-center gap-2">
             <AlertCircle className="h-4 w-4 shrink-0" />
@@ -173,19 +163,17 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* LEVEL 1: COMMAND CENTER HEADER & POSTURE */}
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-5">
+      {/* STAGE 1: COMMAND CENTER HEADER & SYNC CONTROLS */}
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border/80 pb-4">
         <div>
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-xl font-bold tracking-tight text-ink-primary">
               SOC Command Center
             </h1>
-            <span
-              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 font-mono text-[11px] font-semibold tracking-wide ${posture.border} ${posture.bg} ${posture.text}`}
-            >
-              <span className={`h-1.5 w-1.5 rounded-full ${posture.dot} animate-pulse`} />
-              {posture.label}
-            </span>
+            <div className="flex items-center gap-1.5 text-xs font-mono">
+              <span className={`h-2 w-2 rounded-full ${posture.dot}`} />
+              <span className={`font-semibold ${posture.text}`}>{posture.label}</span>
+            </div>
           </div>
           <p className="mt-1 text-xs text-ink-secondary">
             Continuous enterprise threat monitoring, automated event correlation, and triage dispatch
@@ -200,485 +188,171 @@ export default function DashboardPage() {
             </span>
           )}
 
-          {/* Auto Refresh Toggle */}
           <button
             type="button"
             onClick={() => setAutoRefresh(!autoRefresh)}
             title="Toggle automated 30-second telemetry polling"
-            className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-mono transition active:scale-95 ${
+            className={`flex items-center gap-1.5 rounded border px-2.5 py-1 text-xs font-mono transition-colors ${
               autoRefresh
                 ? 'border-accent-emerald/40 bg-accent-emerald/10 text-accent-emerald'
                 : 'border-border bg-panel text-ink-muted hover:text-ink-secondary'
             }`}
           >
             <Clock className="h-3 w-3" />
-            <span>{autoRefresh ? 'Auto: 30s' : 'Polling: Off'}</span>
+            <span>{autoRefresh ? '30s Polling' : 'Manual'}</span>
           </button>
 
-          {/* Manual Refresh */}
           <button
             type="button"
             onClick={() => load(true)}
             disabled={refreshing}
-            className="btn-ghost text-xs py-1.5 px-3 flex items-center gap-1.5"
+            className="btn-ghost text-xs py-1 px-3 flex items-center gap-1.5"
           >
             <RefreshCw
-              className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin text-accent-emerald' : 'text-ink-muted'}`}
+              className={`h-3 w-3 ${refreshing ? 'animate-spin text-accent-emerald' : 'text-ink-muted'}`}
             />
             <span>{refreshing ? 'Syncing…' : 'Sync'}</span>
           </button>
 
-          <Link href="/upload-logs" className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5">
+          <Link href="/upload-logs" className="btn-primary text-xs py-1 px-3 flex items-center gap-1.5">
             <Upload className="h-3.5 w-3.5" />
-            <span>Ingest Logs</span>
+            <span>Ingest Telemetry</span>
           </Link>
         </div>
       </div>
 
-      {/* LEVEL 2: CRITICAL ATTENTION / KPI STRIP */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {/* Critical Card */}
+      {/* STAGE 2: UNIFIED HORIZONTAL POSTURE & METRICS STRIP */}
+      <div className="rounded-lg border border-border/80 bg-panel/70 grid grid-cols-2 sm:grid-cols-5 divide-y sm:divide-y-0 sm:divide-x divide-border/60">
         <Link
-          href="/incidents"
-          className={`card p-4 transition-all duration-150 hover:border-border-active cursor-pointer ${
-            criticalCount > 0
-              ? 'border-severity-critical/40 bg-panel hover:border-severity-critical/70'
-              : 'border-border bg-panel'
-          }`}
+          href="/incidents?severity=CRITICAL"
+          className="p-3.5 hover:bg-elevated/40 transition-colors group"
         >
-          <div className="flex items-center justify-between">
-            <span className="font-mono text-[11px] font-semibold uppercase tracking-wider text-severity-critical">
-              Critical Threats
-            </span>
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-severity-critical/50 bg-[#450a0a]">
-              <Flame className="h-3.5 w-3.5 text-severity-critical" />
+          <div className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-severity-critical shrink-0" />
+            <span className="text-[11px] font-sans font-medium uppercase tracking-wider text-ink-muted group-hover:text-ink-secondary">
+              Critical
             </span>
           </div>
-          <div className="mt-2 flex items-baseline gap-2">
+          <div className="mt-1 flex items-baseline gap-2">
             <span className="text-2xl font-bold font-mono text-ink-primary tabular-nums">
               {criticalCount}
             </span>
-            <span className="text-xs text-ink-secondary">
-              {criticalCount > 0 ? 'immediate response required' : 'no critical backlog'}
-            </span>
+            <span className="text-[11px] text-severity-critical">immediate</span>
           </div>
         </Link>
 
-        {/* High Threat Card */}
         <Link
-          href="/incidents"
-          className={`card p-4 transition-all duration-150 hover:border-border-active cursor-pointer ${
-            highCount > 0
-              ? 'border-severity-high/40 bg-panel hover:border-severity-high/70'
-              : 'border-border bg-panel'
-          }`}
+          href="/incidents?severity=HIGH"
+          className="p-3.5 hover:bg-elevated/40 transition-colors group"
         >
-          <div className="flex items-center justify-between">
-            <span className="font-mono text-[11px] font-semibold uppercase tracking-wider text-severity-high">
-              High Severity
-            </span>
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-severity-high/50 bg-[#431407]">
-              <AlertTriangle className="h-3.5 w-3.5 text-severity-high" />
+          <div className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-severity-high shrink-0" />
+            <span className="text-[11px] font-sans font-medium uppercase tracking-wider text-ink-muted group-hover:text-ink-secondary">
+              High
             </span>
           </div>
-          <div className="mt-2 flex items-baseline gap-2">
+          <div className="mt-1 flex items-baseline gap-2">
             <span className="text-2xl font-bold font-mono text-ink-primary tabular-nums">
               {highCount}
             </span>
-            <span className="text-xs text-ink-secondary">active attack progression</span>
+            <span className="text-[11px] text-severity-high">escalated</span>
           </div>
         </Link>
 
-        {/* Active Triage Queue Card */}
         <Link
           href="/incidents"
-          className="card p-4 border-border bg-panel transition-all duration-150 hover:border-border-active cursor-pointer"
+          className="p-3.5 hover:bg-elevated/40 transition-colors group"
         >
-          <div className="flex items-center justify-between">
-            <span className="font-mono text-[11px] font-semibold uppercase tracking-wider text-severity-medium">
+          <div className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-severity-medium shrink-0" />
+            <span className="text-[11px] font-sans font-medium uppercase tracking-wider text-ink-muted group-hover:text-ink-secondary">
               Active Triage
             </span>
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-severity-medium/50 bg-[#422006]">
-              <ShieldAlert className="h-3.5 w-3.5 text-severity-medium" />
-            </span>
           </div>
-          <div className="mt-2 flex items-baseline gap-2">
+          <div className="mt-1 flex items-baseline gap-2">
             <span className="text-2xl font-bold font-mono text-ink-primary tabular-nums">
               {openInc}
             </span>
-            <span className="text-xs text-ink-secondary">of {totalInc} total incidents</span>
+            <span className="text-[11px] text-ink-muted">of {totalInc} total</span>
           </div>
         </Link>
 
-        {/* Total Telemetry Processed */}
         <Link
           href="/logs"
-          className="card p-4 border-border bg-panel transition-all duration-150 hover:border-border-active cursor-pointer"
+          className="p-3.5 hover:bg-elevated/40 transition-colors group"
         >
-          <div className="flex items-center justify-between">
-            <span className="font-mono text-[11px] font-semibold uppercase tracking-wider text-severity-low">
-              Events Ingested
-            </span>
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-severity-low/50 bg-[#083344]">
-              <Activity className="h-3.5 w-3.5 text-severity-low" />
+          <div className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-severity-low shrink-0" />
+            <span className="text-[11px] font-sans font-medium uppercase tracking-wider text-ink-muted group-hover:text-ink-secondary">
+              Telemetry Processed
             </span>
           </div>
-          <div className="mt-2 flex items-baseline gap-2">
+          <div className="mt-1 flex items-baseline gap-2">
             <span className="text-2xl font-bold font-mono text-ink-primary tabular-nums">
               {processed.toLocaleString()}
             </span>
-            <span className="text-xs font-mono text-severity-critical">{flagged} flagged</span>
+            <span className="text-[11px] text-ink-muted font-mono">{flagged} flagged</span>
           </div>
         </Link>
-      </div>
 
-      {/* LEVEL 3: DETECTION PIPELINE & TELEMETRY HEALTH */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Detection Pipeline Funnel */}
-        <div className="card p-5">
-          <div className="flex items-center justify-between border-b border-border pb-3">
-            <div>
-              <h2 className="text-sm font-semibold text-ink-primary flex items-center gap-2">
-                <Layers className="h-4 w-4 text-accent-emerald" />
-                Detection Pipeline Funnel
-              </h2>
-              <p className="mt-0.5 text-xs text-ink-secondary">
-                Conversion of raw telemetry streams into correlated security incidents
-              </p>
-            </div>
-            <span className="font-mono text-[11px] text-accent-emerald bg-accent-emerald/10 px-2 py-0.5 rounded border border-accent-emerald/20">
-              {flagRate}% Anomaly Ratio
+        <div className="p-3.5">
+          <div className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-accent-emerald shrink-0" />
+            <span className="text-[11px] font-sans font-medium uppercase tracking-wider text-ink-muted">
+              Pipeline State
             </span>
           </div>
-
-          <div className="mt-4 space-y-4 font-mono text-xs">
-            {/* Stage 1: Ingested */}
-            <div className="space-y-1">
-              <div className="flex justify-between text-ink-secondary">
-                <span className="flex items-center gap-1.5">
-                  <span className="h-1.5 w-1.5 rounded-full bg-accent-blue" />
-                  1. Raw Security Telemetry
-                </span>
-                <span className="text-ink-primary font-semibold">{processed.toLocaleString()} events</span>
-              </div>
-              <div className="h-2 w-full rounded-full bg-canvas overflow-hidden">
-                <div className="h-2 rounded-full bg-accent-blue" style={{ width: '100%' }} />
-              </div>
-            </div>
-
-            {/* Stage 2: Flagged */}
-            <div className="space-y-1">
-              <div className="flex justify-between text-ink-secondary">
-                <span className="flex items-center gap-1.5">
-                  <span className="h-1.5 w-1.5 rounded-full bg-severity-critical" />
-                  2. Suspicious Indicators Flagged
-                </span>
-                <span className="text-severity-critical font-semibold">
-                  {flagged.toLocaleString()} ({flagRate}%)
-                </span>
-              </div>
-              <div className="h-2 w-full rounded-full bg-canvas overflow-hidden">
-                <div
-                  className="h-2 rounded-full bg-severity-critical transition-all duration-300"
-                  style={{ width: `${Math.min(100, Math.max(3, Number(flagRate)))}%` }}
-                />
-              </div>
-            </div>
-
-            {/* Stage 3: Correlated Incidents */}
-            <div className="space-y-1">
-              <div className="flex justify-between text-ink-secondary">
-                <span className="flex items-center gap-1.5">
-                  <span className="h-1.5 w-1.5 rounded-full bg-severity-medium" />
-                  3. Correlated Threat Incidents
-                </span>
-                <span className="text-severity-medium font-semibold">
-                  {totalInc} incidents ({conversionRate}% of flagged)
-                </span>
-              </div>
-              <div className="h-2 w-full rounded-full bg-canvas overflow-hidden">
-                <div
-                  className="h-2 rounded-full bg-severity-medium transition-all duration-300"
-                  style={{ width: `${Math.min(100, Math.max(2, totalInc * 6))}%` }}
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-4 pt-3 border-t border-border-subtle flex items-center justify-between text-[11px] font-mono text-ink-muted">
-            <span>Engine: Rule Pattern + Temporal Aggregator</span>
-            <Link href="/logs" className="text-accent-emerald hover:underline flex items-center gap-1">
-              Inspect Raw Telemetry <ArrowRight className="h-3 w-3" />
-            </Link>
-          </div>
-        </div>
-
-        {/* Integration & Telemetry Health */}
-        <div className="card p-5">
-          <div className="flex items-center justify-between border-b border-border pb-3">
-            <div>
-              <h2 className="text-sm font-semibold text-ink-primary flex items-center gap-2">
-                <Server className="h-4 w-4 text-accent-cyan" />
-                Telemetry & Integration Health
-              </h2>
-              <p className="mt-0.5 text-xs text-ink-secondary">
-                Active sensor links, dedup state, and daemon heartbeats
-              </p>
-            </div>
-            <Link
-              href="/integrations/wazuh"
-              className="text-[11px] font-mono text-accent-cyan hover:underline flex items-center gap-1"
-            >
-              Configure <ExternalLink className="h-3 w-3" />
-            </Link>
-          </div>
-
-          <div className="mt-4 space-y-3 font-mono text-xs">
-            {/* Wazuh Manager State */}
-            <div className="flex items-center justify-between p-2.5 rounded-lg border border-border-subtle bg-canvas/60">
-              <div className="flex items-center gap-2">
-                <span
-                  className={`h-2 w-2 rounded-full ${
-                    wazuh?.status === 'ready'
-                      ? 'bg-accent-emerald animate-pulse-subtle'
-                      : wazuh
-                      ? 'bg-severity-critical'
-                      : 'bg-severity-medium'
-                  }`}
-                />
-                <span className="text-ink-primary font-medium">Wazuh SIEM Ingestion Link</span>
-              </div>
-              <span className="text-[11px] text-ink-secondary capitalize">
-                {wazuh?.status || 'Polling Status…'}
-              </span>
-            </div>
-
-            {/* Dedup Cache Status */}
-            <div className="flex items-center justify-between p-2.5 rounded-lg border border-border-subtle bg-canvas/60">
-              <span className="text-ink-secondary">Event Dedup LRU Cache</span>
-              <span className="text-ink-primary font-semibold">
-                {wazuh?.dedup_cache_size ?? '—'} signatures cached
-              </span>
-            </div>
-
-            {/* Ingestion Polling Daemon */}
-            <div className="flex items-center justify-between p-2.5 rounded-lg border border-border-subtle bg-canvas/60">
-              <span className="text-ink-secondary">Background Ingestion Daemon</span>
-              <span
-                className={`text-[11px] font-semibold ${
-                  wazuh?.api_polling?.running
-                    ? 'text-accent-emerald'
-                    : wazuh?.api_polling?.enabled
-                    ? 'text-accent-cyan'
-                    : 'text-ink-muted'
-                }`}
-              >
-                {wazuh?.api_polling?.running
-                  ? 'Actively Ingesting'
-                  : wazuh?.api_polling?.enabled
-                  ? 'Enabled (Standby)'
-                  : 'Disabled'}
-              </span>
-            </div>
-          </div>
-
-          <div className="mt-4 pt-3 border-t border-border-subtle flex items-center justify-between text-[11px] font-mono text-ink-muted">
-            <span>Alerts Processed: {wazuh?.api_polling?.total_alerts_processed ?? 0}</span>
-            <span>Errors: {wazuh?.api_polling?.consecutive_errors ?? 0}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* LEVEL 4: THREAT DISTRIBUTION ANALYTICS */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Severity Distribution */}
-        <div className="card p-5">
-          <div className="flex items-center justify-between border-b border-border pb-3">
-            <div>
-              <h2 className="text-sm font-semibold text-ink-primary flex items-center gap-2">
-                <BarChart3 className="h-4 w-4 text-severity-high" />
-                Severity Breakdown
-              </h2>
-              <p className="mt-0.5 text-xs text-ink-secondary">
-                Current incident distribution by threat severity level
-              </p>
-            </div>
-            <span className="font-mono text-xs text-ink-muted">{totalInc} Total</span>
-          </div>
-
-          {/* Segmented Bar */}
-          <div className="mt-4">
-            <div className="h-3 w-full rounded-full bg-canvas flex overflow-hidden">
-              {totalInc > 0 ? (
-                <>
-                  {criticalCount > 0 && (
-                    <div
-                      className="h-full bg-severity-critical"
-                      style={{ width: `${(criticalCount / totalInc) * 100}%` }}
-                      title={`Critical: ${criticalCount}`}
-                    />
-                  )}
-                  {highCount > 0 && (
-                    <div
-                      className="h-full bg-severity-high"
-                      style={{ width: `${(highCount / totalInc) * 100}%` }}
-                      title={`High: ${highCount}`}
-                    />
-                  )}
-                  {mediumCount > 0 && (
-                    <div
-                      className="h-full bg-severity-medium"
-                      style={{ width: `${(mediumCount / totalInc) * 100}%` }}
-                      title={`Medium: ${mediumCount}`}
-                    />
-                  )}
-                  {lowCount > 0 && (
-                    <div
-                      className="h-full bg-severity-low"
-                      style={{ width: `${(lowCount / totalInc) * 100}%` }}
-                      title={`Low: ${lowCount}`}
-                    />
-                  )}
-                </>
-              ) : (
-                <div className="h-full w-full bg-border-subtle" />
-              )}
-            </div>
-
-            {/* Distribution Legend & Counts */}
-            <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
-              <div className="rounded-lg border border-border-subtle bg-canvas/40 p-2.5">
-                <div className="flex items-center gap-1.5 text-severity-critical mb-1">
-                  <span className="h-1.5 w-1.5 rounded-full bg-severity-critical" />
-                  <span>CRITICAL</span>
-                </div>
-                <div className="text-base font-bold text-ink-primary">{criticalCount}</div>
-                <div className="text-[10px] text-ink-muted">
-                  {totalInc > 0 ? Math.round((criticalCount / totalInc) * 100) : 0}%
-                </div>
-              </div>
-
-              <div className="rounded-lg border border-border-subtle bg-canvas/40 p-2.5">
-                <div className="flex items-center gap-1.5 text-severity-high mb-1">
-                  <span className="h-1.5 w-1.5 rounded-full bg-severity-high" />
-                  <span>HIGH</span>
-                </div>
-                <div className="text-base font-bold text-ink-primary">{highCount}</div>
-                <div className="text-[10px] text-ink-muted">
-                  {totalInc > 0 ? Math.round((highCount / totalInc) * 100) : 0}%
-                </div>
-              </div>
-
-              <div className="rounded-lg border border-border-subtle bg-canvas/40 p-2.5">
-                <div className="flex items-center gap-1.5 text-severity-medium mb-1">
-                  <span className="h-1.5 w-1.5 rounded-full bg-severity-medium" />
-                  <span>MEDIUM</span>
-                </div>
-                <div className="text-base font-bold text-ink-primary">{mediumCount}</div>
-                <div className="text-[10px] text-ink-muted">
-                  {totalInc > 0 ? Math.round((mediumCount / totalInc) * 100) : 0}%
-                </div>
-              </div>
-
-              <div className="rounded-lg border border-border-subtle bg-canvas/40 p-2.5">
-                <div className="flex items-center gap-1.5 text-severity-low mb-1">
-                  <span className="h-1.5 w-1.5 rounded-full bg-severity-low" />
-                  <span>LOW</span>
-                </div>
-                <div className="text-base font-bold text-ink-primary">{lowCount}</div>
-                <div className="text-[10px] text-ink-muted">
-                  {totalInc > 0 ? Math.round((lowCount / totalInc) * 100) : 0}%
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Attack Type & Technique Distribution */}
-        <div className="card p-5">
-          <div className="flex items-center justify-between border-b border-border pb-3">
-            <div>
-              <h2 className="text-sm font-semibold text-ink-primary flex items-center gap-2">
-                <Shield className="h-4 w-4 text-accent-emerald" />
-                Attack Vector Classification
-              </h2>
-              <p className="mt-0.5 text-xs text-ink-secondary">
-                Classified attacker behavior patterns across correlated incidents
-              </p>
-            </div>
-            <span className="font-mono text-xs text-ink-muted">
-              {sortedAttackTypes.length} Classes
+          <div className="mt-1 flex items-baseline gap-2">
+            <span className="text-2xl font-bold font-mono text-accent-emerald tabular-nums">
+              {flagRate}%
             </span>
-          </div>
-
-          <div className="mt-4 space-y-2.5">
-            {sortedAttackTypes.length === 0 ? (
-              <p className="text-xs text-ink-muted py-6 text-center">
-                No attack categories detected yet.
-              </p>
-            ) : (
-              sortedAttackTypes.map(([type, count]) => {
-                const pct = totalInc > 0 ? Math.round((count / totalInc) * 100) : 0
-                return (
-                  <div
-                    key={type}
-                    className="flex items-center justify-between rounded-lg border border-border-subtle bg-canvas/40 px-3 py-2 text-xs"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <AttackTypeLabel attackType={type} />
-                      <span className="font-mono text-[11px] text-ink-muted">({pct}%)</span>
-                    </div>
-                    <span className="rounded bg-elevated px-2 py-0.5 font-mono text-xs font-semibold text-ink-primary">
-                      {count} {count === 1 ? 'incident' : 'incidents'}
-                    </span>
-                  </div>
-                )
-              })
-            )}
+            <span className="text-[11px] text-ink-muted">anomaly ratio</span>
           </div>
         </div>
       </div>
 
-      {/* LEVEL 5: RECENT INCIDENTS QUEUE TABLE */}
-      <div className="card overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4 sm:p-5">
-          <div>
-            <h2 className="text-sm font-semibold text-ink-primary flex items-center gap-2">
-              <Clock className="h-4 w-4 text-accent-emerald" />
-              Recent Incidents Triage Queue
+      {/* STAGE 3: PRIMARY PRIORITY INCIDENTS TABLE (ANALYST WORKSPACE FOCUS) */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between border-b border-border/80 pb-2.5">
+          <div className="flex items-center gap-2.5">
+            <h2 className="text-sm font-semibold text-ink-primary">
+              Priority Incidents Requiring Triage
             </h2>
-            <p className="mt-0.5 text-xs text-ink-secondary">
-              Latest high-priority security alerts pending analyst investigation
-            </p>
+            <span className="rounded bg-elevated px-2 py-0.5 font-mono text-xs text-ink-secondary border border-border">
+              {s.recent_incidents.length} active
+            </span>
           </div>
-          <Link href="/incidents" className="btn-ghost text-xs py-1.5 px-3 flex items-center gap-1">
-            <span>View Full Queue ({totalInc})</span>
-            <ArrowRight className="h-3 w-3" />
+          <Link
+            href="/incidents"
+            className="text-xs font-medium text-ink-secondary hover:text-ink-primary flex items-center gap-1 transition-colors"
+          >
+            <span>Open Incident Queue ({totalInc})</span>
+            <ArrowRight className="h-3.5 w-3.5" />
           </Link>
         </div>
 
         {s.recent_incidents.length === 0 ? (
           <EmptyState
-            title="No recent incidents"
-            description="No active security incidents recorded in this environment. Ingest telemetry logs to initiate automated correlation."
-            actionLabel="Ingest Logs"
+            title="No open incidents"
+            description="All security incidents have been resolved or triaged. Telemetry ingest will automatically synthesize new threats."
+            actionLabel="Ingest Telemetry"
             actionHref="/upload-logs"
           />
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto border-y border-border/80">
             <table className="w-full text-left font-sans text-xs">
-              <thead className="th-soc border-b border-border">
+              <thead className="th-soc">
                 <tr>
-                  <th className="py-2.5 px-4">Severity</th>
-                  <th className="py-2.5 px-4">Incident Title & Scope</th>
-                  <th className="py-2.5 px-4">Attack Vector</th>
-                  <th className="py-2.5 px-4">Target Entity</th>
-                  <th className="py-2.5 px-4">Detected</th>
-                  <th className="py-2.5 px-4">Status</th>
-                  <th className="py-2.5 px-4 text-right">Action</th>
+                  <th className="py-2.5 px-3.5">Severity</th>
+                  <th className="py-2.5 px-3.5">Incident Title & Scope</th>
+                  <th className="py-2.5 px-3.5">Attack Vector</th>
+                  <th className="py-2.5 px-3.5">Target Entity</th>
+                  <th className="py-2.5 px-3.5">Status</th>
+                  <th className="py-2.5 px-3.5">Detected</th>
+                  <th className="py-2.5 px-3.5 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border-subtle">
+              <tbody className="divide-y divide-border-subtle/80">
                 {s.recent_incidents.map((inc) => (
                   <tr
                     key={inc.id}
@@ -687,13 +361,13 @@ export default function DashboardPage() {
                       if (e.key === 'Enter') router.push(`/incidents/${inc.id}`)
                     }}
                     onClick={() => router.push(`/incidents/${inc.id}`)}
-                    className="tr-soc cursor-pointer focus-visible:outline-none focus-visible:bg-highlight"
+                    className="tr-soc cursor-pointer"
                   >
                     <td className="td-soc whitespace-nowrap">
                       <SeverityBadge severity={inc.severity} />
                     </td>
-                    <td className="td-soc max-w-xs">
-                      <span className="font-semibold text-ink-primary block truncate group-hover:text-accent-emerald">
+                    <td className="td-soc max-w-sm">
+                      <span className="font-semibold text-ink-primary block truncate hover:text-accent-emerald transition-colors">
                         {inc.title}
                       </span>
                       <span className="font-mono text-[10px] text-ink-muted block mt-0.5">
@@ -718,13 +392,13 @@ export default function DashboardPage() {
                         <span className="text-ink-muted">—</span>
                       )}
                     </td>
-                    <td className="td-soc whitespace-nowrap font-mono text-[11px] text-ink-secondary">
+                    <td className="td-soc whitespace-nowrap">
+                      <StatusBadge status={inc.status} />
+                    </td>
+                    <td className="td-soc whitespace-nowrap font-mono text-[11px] text-ink-muted">
                       <span title={format(new Date(inc.created_at), 'yyyy-MM-dd HH:mm:ss')}>
                         {formatDistanceToNow(new Date(inc.created_at), { addSuffix: true })}
                       </span>
-                    </td>
-                    <td className="td-soc whitespace-nowrap">
-                      <StatusBadge status={inc.status} />
                     </td>
                     <td
                       className="td-soc text-right whitespace-nowrap"
@@ -733,7 +407,7 @@ export default function DashboardPage() {
                       <div className="flex items-center justify-end gap-1.5">
                         <Link
                           href={`/incidents/${inc.id}`}
-                          className="inline-flex items-center gap-1 rounded-md border border-border bg-elevated px-2 py-1 text-[11px] font-medium text-ink-secondary hover:text-ink-primary hover:border-border-active transition active:scale-95"
+                          className="btn-ghost text-[11px] py-1 px-2"
                           title="Open full incident investigation workspace"
                         >
                           <span>Triage</span>
@@ -741,11 +415,11 @@ export default function DashboardPage() {
                         </Link>
                         <Link
                           href={`/incidents/${inc.id}/chat`}
-                          className="inline-flex items-center gap-1 rounded-md border border-accent-cyan/30 bg-accent-cyan/10 px-2 py-1 text-[11px] font-medium text-accent-cyan hover:bg-accent-cyan/20 transition active:scale-95"
+                          className="btn-ghost text-[11px] py-1 px-2 border-accent-cyan/30 text-accent-cyan"
                           title="Consult AI Investigation Copilot"
                         >
                           <MessageSquare className="h-3 w-3" />
-                          <span className="hidden sm:inline">Copilot</span>
+                          <span>Copilot</span>
                         </Link>
                       </div>
                     </td>
@@ -755,6 +429,124 @@ export default function DashboardPage() {
             </table>
           </div>
         )}
+      </div>
+
+      {/* STAGE 4: TWO-COLUMN TELEMETRY & PIPELINE OBSERVABILITY */}
+      <div className="grid gap-6 lg:grid-cols-2 pt-2">
+        {/* Left Column: Detection Pipeline Conversion Funnel */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between border-b border-border/80 pb-2">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-muted flex items-center gap-1.5">
+              <Layers className="h-3.5 w-3.5 text-accent-emerald" />
+              <span>Telemetry Ingestion & Detection Funnel</span>
+            </h3>
+            <span className="font-mono text-[11px] text-ink-muted">
+              {conversionRate}% Flag Conversion
+            </span>
+          </div>
+
+          <div className="space-y-3 font-mono text-xs">
+            <div className="p-3 rounded border border-border/80 bg-panel/50 space-y-1.5">
+              <div className="flex justify-between text-ink-secondary">
+                <span>1. Raw Security Telemetry</span>
+                <span className="text-ink-primary font-semibold">{processed.toLocaleString()} events</span>
+              </div>
+              <div className="h-1.5 w-full rounded-full bg-canvas overflow-hidden">
+                <div className="h-full bg-accent-blue" style={{ width: '100%' }} />
+              </div>
+            </div>
+
+            <div className="p-3 rounded border border-border/80 bg-panel/50 space-y-1.5">
+              <div className="flex justify-between text-ink-secondary">
+                <span>2. Suspicious Anomaly Triggers</span>
+                <span className="text-severity-critical font-semibold">
+                  {flagged.toLocaleString()} ({flagRate}%)
+                </span>
+              </div>
+              <div className="h-1.5 w-full rounded-full bg-canvas overflow-hidden">
+                <div
+                  className="h-full bg-severity-critical"
+                  style={{ width: `${Math.min(100, Math.max(3, Number(flagRate)))}%` }}
+                />
+              </div>
+            </div>
+
+            <div className="p-3 rounded border border-border/80 bg-panel/50 space-y-1.5">
+              <div className="flex justify-between text-ink-secondary">
+                <span>3. Correlated Threat Incidents</span>
+                <span className="text-severity-medium font-semibold">
+                  {totalInc} incidents ({conversionRate}%)
+                </span>
+              </div>
+              <div className="h-1.5 w-full rounded-full bg-canvas overflow-hidden">
+                <div
+                  className="h-full bg-severity-medium"
+                  style={{ width: `${Math.min(100, Math.max(2, totalInc * 6))}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Right Column: Telemetry & Wazuh Integration Health */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between border-b border-border/80 pb-2">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-muted flex items-center gap-1.5">
+              <Server className="h-3.5 w-3.5 text-accent-cyan" />
+              <span>Sensors & Daemon Health</span>
+            </h3>
+            <Link
+              href="/integrations/wazuh"
+              className="text-[11px] font-mono text-accent-cyan hover:underline flex items-center gap-1"
+            >
+              Configure <ExternalLink className="h-3 w-3" />
+            </Link>
+          </div>
+
+          <div className="space-y-2 font-mono text-xs">
+            <div className="flex items-center justify-between p-2.5 rounded border border-border/80 bg-panel/50">
+              <span className="text-ink-secondary">Wazuh SIEM Ingestion Link</span>
+              <div className="flex items-center gap-2">
+                <span
+                  className={`h-2 w-2 rounded-full ${
+                    wazuh?.status === 'ready'
+                      ? 'bg-accent-emerald'
+                      : wazuh
+                      ? 'bg-severity-critical'
+                      : 'bg-severity-medium'
+                  }`}
+                />
+                <span className="text-ink-primary capitalize">{wazuh?.status || 'Standby'}</span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between p-2.5 rounded border border-border/80 bg-panel/50">
+              <span className="text-ink-secondary">Deduplication LRU Cache</span>
+              <span className="text-ink-primary font-semibold">
+                {wazuh?.dedup_cache_size ?? 0} signatures
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between p-2.5 rounded border border-border/80 bg-panel/50">
+              <span className="text-ink-secondary">Ingestion Poller Loop</span>
+              <span
+                className={`font-semibold ${
+                  wazuh?.api_polling?.running
+                    ? 'text-accent-emerald'
+                    : wazuh?.api_polling?.enabled
+                    ? 'text-accent-cyan'
+                    : 'text-ink-muted'
+                }`}
+              >
+                {wazuh?.api_polling?.running
+                  ? 'Actively Ingesting'
+                  : wazuh?.api_polling?.enabled
+                  ? 'Daemon Ready'
+                  : 'Idle'}
+              </span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )

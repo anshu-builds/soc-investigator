@@ -553,26 +553,26 @@ ${activePlaybook.escalationCriteria.map((c) => `- ${c}`).join('\n')}`
                     type="button"
                     tabIndex={0}
                     onClick={() => setSelectedId(pb.id)}
-                    className={`w-full text-left rounded-xl border p-3.5 transition group ${
+                    className={`w-full text-left rounded border p-3 transition-colors group ${
                       isSelected
-                        ? 'border-accent-emerald bg-elevated shadow-sm'
-                        : 'border-border bg-panel hover:border-border-active hover:bg-elevated/50'
+                        ? 'border-accent-emerald/80 bg-elevated'
+                        : 'border-border/80 bg-panel/60 hover:border-border hover:bg-elevated/40'
                     }`}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-mono text-[10px] uppercase text-accent-emerald font-semibold">
+                      <span className="font-mono text-[10px] uppercase text-accent-emerald font-medium">
                         {pb.category}
                       </span>
                       <ChevronRight
                         className={`h-3.5 w-3.5 transition-transform ${
                           isSelected
                             ? 'text-accent-emerald translate-x-0.5'
-                            : 'text-ink-muted group-hover:text-ink-primary'
+                            : 'text-ink-muted group-hover:text-ink-secondary'
                         }`}
                       />
                     </div>
 
-                    <h3 className="mt-1 text-xs font-bold text-ink-primary line-clamp-1 group-hover:text-accent-emerald transition-colors">
+                    <h3 className="mt-1 text-xs font-semibold text-ink-primary line-clamp-1 group-hover:text-accent-emerald transition-colors">
                       {pb.title}
                     </h3>
 
@@ -605,7 +605,7 @@ ${activePlaybook.escalationCriteria.map((c) => `- ${c}`).join('\n')}`
         </div>
 
         {/* Right Column: Active Playbook Reader Dossier */}
-        <div className="card p-6 sm:p-7 border-border bg-panel space-y-6 shadow-sm">
+        <div className="rounded-lg border border-border/80 bg-panel p-5 sm:p-6 space-y-5 shadow-sm">
           {/* Header Strip */}
           <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border-subtle pb-5">
             <div className="space-y-2">
